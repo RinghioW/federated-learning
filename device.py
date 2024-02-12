@@ -7,7 +7,12 @@ class Device():
         self.model = model
         self.dataset = dataset
 
+    def __repr__(self) -> str:
+        return f"Device(config={self.config}, model={self.model}, dataset={self.dataset})"
+
     def train(self, epochs=5, verbose=True):
+        if self.model is None or self.dataset is None:
+            raise ValueError("Model or dataset is None.")
         net = self.model
         trainloader = self.dataset
         """Train the network on the training set."""

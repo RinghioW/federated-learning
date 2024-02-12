@@ -3,29 +3,35 @@ import torch.nn as nn
 import torch.optim as optim
 import torch
 class User():
-    def __init__(self, devices, model=None, kd_dataset=None):
-        self.model = model
+    def __init__(self, devices, kd_dataset=None):
         self.devices = devices
         self.kd_dataset = kd_dataset
+        self.model = None
 
     # Adapt the model to the devices
-    def adapt(self):
+    def adapt_model(self, model):
+        self.model = model
         for device in self.devices:
             if device.config["compute"] < 5:
-                device.model = models.quantization.mobilenet_v2(weights=models.quantization.MobileNet_V2_QuantizedWeights.DEFAULT, quantize=True)
+                device.model = models.quantization.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT, quantize=False)
             elif device.config["compute"] < 10:
-                device.model = models.quantization.mobilenet_v3_large(weights=models.quantization.MobileNet_V3_Large_QuantizedWeights.DEFAULT, quantize=True)
+                device.model = models.quantization.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT, quantize=False)
             else:
                 device.model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
                 
     # Devices shuflle the data and create a knowledge distillation dataset
     def shuffle_data(self):
         for devices in self.devices:
+            # Shuffle the data
             pass
-        self.kd_dataset = []
+        kd_samples = []
+        kd_labels = []
         for device in self.devices:
-            # Append the first 10 data points from each device
-            self.kd_dataset.append(device.dataset[:10])
+            # Sample 10 random samples from each device
+            samples, labels = zip(*[batch for batch in device.dataset])
+            kd_samples.append(samples[:10])
+            kd_labels.append(labels[:10])
+        self.kd_dataset = torch.utils.data.DataLoader(zip(kd_samples, kd_labels))
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
@@ -42,7 +48,7 @@ class User():
             for epoch in range(epochs):
                 running_loss = 0.0
                 for inputs, labels in train_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
+                    # inputs, labels = inputs.to(device), labels.to(device)
 
                     optimizer.zero_grad()
 

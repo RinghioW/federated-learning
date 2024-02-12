@@ -38,7 +38,7 @@ def main():
         pass # Add more datasets here
     
     # Create device configurations
-    configs = [{"compute" : np.random.randint(1, 10), "memory" : np.random.randint(1, 10)} for _ in range(num_devices)]
+    configs = [{"compute" : np.random.randint(1, 15), "memory" : np.random.randint(1, 15)} for _ in range(num_devices)]
 
     # Create devices and users
     devices = [Device(configs[i], trainloaders[i]) for i in range(num_devices)]
@@ -48,18 +48,19 @@ def main():
 
     # The server sends the model to the users
     for user in users:
-        user.model = server.model
+        # Each user adapts the model for their devices
+        user.adapt_model(server.model)
     
-    # Each user adapts the model for their devices
-    for user in users:
-        user.adapt()
 
     # Perform federated learning for the server model
     for epoch in range(epochs):
+        print(f"FL epoch {epoch+1}/{epochs}")
         for user in users:
             user.shuffle_data()
             for device in user.devices:
+                print(f"Training device {device}...")
                 device.train(epochs=3)
+            print(f"Aggregating updates from user {user}...")
             user.aggregate_updates()
         server.aggregate_updates(users)
         server.evaluate(testloader)
