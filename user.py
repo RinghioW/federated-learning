@@ -2,6 +2,7 @@ import torchvision.models as models
 import torch.nn as nn
 import torch.optim as optim
 import torch
+import torch.utils.data as tdata
 class User():
     def __init__(self, devices, kd_dataset=None):
         self.devices = devices
@@ -24,14 +25,10 @@ class User():
         for devices in self.devices:
             # Shuffle the data
             pass
-        kd_samples = []
-        kd_labels = []
+        # Create a knowledge distillation dataset
         for device in self.devices:
-            # Sample 10 random samples from each device
-            samples, labels = zip(*[batch for batch in device.dataset])
-            kd_samples.append(samples[:10])
-            kd_labels.append(labels[:10])
-        self.kd_dataset = torch.utils.data.DataLoader(zip(kd_samples, kd_labels))
+            self.kd_dataset = device.dataset
+            break
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
