@@ -57,6 +57,7 @@ def main():
     # Perform federated learning for the server model
     for epoch in range(epochs):
         for user in users:
+            user.shuffle_data()
             for device in user.devices:
                 device.train(epochs=3)
             user.aggregate_updates()

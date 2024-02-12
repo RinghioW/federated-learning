@@ -25,7 +25,7 @@ class User():
         self.kd_dataset = []
         for device in self.devices:
             # Append the first 10 data points from each device
-            self.kd_dataset.append(device.data[:10])
+            self.kd_dataset.append(device.dataset[:10])
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
