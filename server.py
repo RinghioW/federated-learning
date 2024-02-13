@@ -18,7 +18,8 @@ class Server():
             sum_weights[key] /= len(users)
         self.model.load_state_dict(sum_weights)
 
-    def evaluate(self, testloader):
+    def evaluate(self, testset):
+        testloader = torch.utils.data.DataLoader(testset, batch_size=32, shuffle=False, num_workers=2)
         net = self.model
         """Evaluate the network on the entire test set."""
         criterion = torch.nn.CrossEntropyLoss()

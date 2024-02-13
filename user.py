@@ -26,16 +26,17 @@ class User():
             # Shuffle the data
             pass
         # Create a knowledge distillation dataset
+        kd_dataset = []
         for device in self.devices:
-            self.kd_dataset = device.dataset
-            break
+            kd_dataset.append(device.valset)
+        self.kd_dataset = tdata.ConcatDataset(kd_dataset)
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         teacher = self.model
         for device in self.devices:
             student = device.model
-            train_loader = device.dataset
+            train_loader = torch.utils.data.DataLoader(self.kd_dataset, batch_size=32, shuffle=True)
             ce_loss = nn.CrossEntropyLoss()
             optimizer = optim.Adam(student.parameters(), lr=learning_rate)
 

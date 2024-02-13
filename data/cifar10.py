@@ -31,14 +31,13 @@ def load_datasets(num_clients):
         return batch
 
     # Create train/val for each partition and wrap it into DataLoader
-    trainloaders = []
-    valloaders = []
+    trainsets = []
+    valsets = []
     for partition_id in range(num_clients):
         partition = fds.load_partition(partition_id, "train")
         partition = partition.with_transform(apply_transforms)
         partition = partition.train_test_split(train_size=0.8)
-        trainloaders.append(DataLoader(partition["train"], batch_size=BATCH_SIZE))
-        valloaders.append(DataLoader(partition["test"], batch_size=BATCH_SIZE))
+        trainsets.append(partition["train"])
+        valsets.append(partition["test"])
     testset = fds.load_full("test").with_transform(apply_transforms)
-    testloader = DataLoader(testset, batch_size=BATCH_SIZE)
-    return trainloaders, valloaders, testloader
+    return trainsets, valsets, testset

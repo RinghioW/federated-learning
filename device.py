@@ -2,10 +2,11 @@ import torch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Device():
-    def __init__(self, config, dataset=None, model=None) -> None:
+    def __init__(self, config, dataset, valset, model=None) -> None:
         self.config = config
         self.model = model
         self.dataset = dataset
+        self.valset = valset
 
     def __repr__(self) -> str:
         return f"Device(config={self.config}, model={self.model}, dataset={self.dataset})"
@@ -14,7 +15,7 @@ class Device():
         if self.model is None or self.dataset is None:
             raise ValueError("Model or dataset is None.")
         net = self.model
-        trainloader = self.dataset
+        trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=32, shuffle=True, num_workers=2)
         """Train the network on the training set."""
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(net.parameters())

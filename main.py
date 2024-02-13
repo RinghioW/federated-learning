@@ -33,7 +33,7 @@ def main():
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
         from data.cifar10 import load_datasets
-        trainloaders, valloaders, testloader = load_datasets(num_devices)
+        trainsets, valsets, testset = load_datasets(num_devices)
     else:
         pass # Add more datasets here
     
@@ -41,7 +41,7 @@ def main():
     configs = [{"compute" : np.random.randint(1, 15), "memory" : np.random.randint(1, 15)} for _ in range(num_devices)]
 
     # Create devices and users
-    devices = [Device(configs[i], trainloaders[i]) for i in range(num_devices)]
+    devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
     devices_grouped = np.array_split(devices, num_users)
     users = [User(devices_grouped[i]) for i in range(num_users)]
     server = Server(dataset)
@@ -63,7 +63,7 @@ def main():
             print(f"Aggregating updates from user {user}...")
             user.aggregate_updates()
         server.aggregate_updates(users)
-        server.evaluate(testloader)
+        server.evaluate(testset)
 
     print("Done.")
 
