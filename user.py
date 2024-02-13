@@ -78,4 +78,4 @@ class User():
 
                     running_loss += loss.item()
 
-                print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader)}")
+                print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
