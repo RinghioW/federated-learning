@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch
 import torch.utils.data as tdata
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class User():
     def __init__(self, devices, kd_dataset=None):
         self.devices = devices
@@ -29,14 +31,14 @@ class User():
         kd_dataset = []
         for device in self.devices:
             kd_dataset.append(device.valset)
-        self.kd_dataset = tdata.ConcatDataset(kd_dataset)
+        self.kd_dataset = kd_dataset
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
-        for device in self.devices:
+        for i, device in enumerate(self.devices):
             teacher = device.model
-            train_loader = torch.utils.data.DataLoader(self.kd_dataset, batch_size=32, shuffle=True)
+            train_loader = torch.utils.data.DataLoader(self.kd_dataset[i], shuffle=True, batch_size=32)
             ce_loss = nn.CrossEntropyLoss()
             optimizer = optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -45,8 +47,8 @@ class User():
 
             for epoch in range(epochs):
                 running_loss = 0.0
-                for inputs, labels in train_loader:
-                    # inputs, labels = inputs.to(device), labels.to(device)
+                for batch in train_loader:
+                    inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
 
                     optimizer.zero_grad()
 
