@@ -15,7 +15,7 @@ class Server():
             for key in sum_weights:
                 sum_weights[key] += user.model.state_dict()[key]
         for key in sum_weights:
-            sum_weights[key] /= len(users)
+            sum_weights[key] = type(sum_weights[key])(sum_weights[key]/len(users))
         self.model.load_state_dict(sum_weights)
 
     def evaluate(self, testset):

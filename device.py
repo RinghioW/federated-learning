@@ -9,7 +9,7 @@ class Device():
         self.valset = valset
 
     def __repr__(self) -> str:
-        return f"Device(config={self.config}, model={self.model}, dataset={self.dataset})"
+        return f"Device(config={self.config})"
 
     def train(self, epochs=5, verbose=True):
         if self.model is None or self.dataset is None:

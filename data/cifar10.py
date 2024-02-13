@@ -13,9 +13,8 @@ from flwr_datasets import FederatedDataset
 
 BATCH_SIZE = 32
 
-
 def load_datasets(num_clients):
-    fds = FederatedDataset(dataset="cifar10", partitioners={"train": num_clients})
+    fds = FederatedDataset(dataset="cifar10", partitioners={"train": num_clients*10})
 
     def apply_transforms(batch):
         # Instead of passing transforms to CIFAR10(..., transform=transform)

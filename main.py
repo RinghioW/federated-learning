@@ -51,6 +51,10 @@ def main():
         # Each user adapts the model for their devices
         user.adapt_model(server.model)
     
+    # Evaluate the server model before training
+    print("Evaluating server model before training...")
+    loss, accuracy = server.evaluate(testset)
+    print(f"Initial Loss: {loss}, Initial Accuracy: {accuracy}")
 
     # Perform federated learning for the server model
     for epoch in range(epochs):
@@ -62,8 +66,11 @@ def main():
                 device.train(epochs=3)
             print(f"Aggregating updates from user {user}...")
             user.aggregate_updates()
+        print(f"Updating server model...")
         server.aggregate_updates(users)
-        server.evaluate(testset)
+        print(f"Evaluating trained server model...")
+        loss, accuracy = server.evaluate(testset)
+        print(f"Final Loss: {loss}, Final Accuracy: {accuracy}")
 
     print("Done.")
 

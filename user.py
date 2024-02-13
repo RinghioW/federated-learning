@@ -5,6 +5,7 @@ import torch
 import torch.utils.data as tdata
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class User():
     def __init__(self, devices, kd_dataset=None):
         self.devices = devices
