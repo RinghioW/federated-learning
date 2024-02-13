@@ -46,10 +46,6 @@ def main():
     users = [User(devices_grouped[i]) for i in range(num_users)]
     server = Server(dataset)
 
-    # The server sends the model to the users
-    for user in users:
-        # Each user adapts the model for their devices
-        user.adapt_model(server.model)
     
     # Evaluate the server model before training
     print("Evaluating server model before training...")
@@ -59,8 +55,14 @@ def main():
     # Perform federated learning for the server model
     for epoch in range(epochs):
         print(f"FL epoch {epoch+1}/{epochs}")
+        # The server sends the model to the users
         for user in users:
+            # Each user adapts the model for their devices
+            user.adapt_model(server.model)
+
+            # Each user shuffles the data and creates a knowledge distillation dataset
             user.shuffle_data()
+
             for device in user.devices:
                 print(f"Training device {device}...")
                 device.train(epochs=3)
