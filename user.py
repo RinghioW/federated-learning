@@ -33,9 +33,9 @@ class User():
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
-        teacher = self.model
+        student = self.model
         for device in self.devices:
-            student = device.model
+            teacher = device.model
             train_loader = torch.utils.data.DataLoader(self.kd_dataset, batch_size=32, shuffle=True)
             ce_loss = nn.CrossEntropyLoss()
             optimizer = optim.Adam(student.parameters(), lr=learning_rate)
