@@ -5,7 +5,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Server():
     def __init__(self, dataset) -> None:
         if dataset == "cifar10":
-            self.model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+            self.model = models.mobilenet_v3_large()
 
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient

@@ -13,8 +13,8 @@ def main():
     
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
-    parser.add_argument("-u", "--users", dest="users", type=int, default=10, help="Total number of users (default: 10)")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=30, help="Total number of devices (default: 30)")
+    parser.add_argument("-u", "--users", dest="users", type=int, default=3, help="Total number of users (default: 10)")
+    parser.add_argument("-d", "--devices", dest="devices", type=int, default=6, help="Total number of devices (default: 30)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs (default: 10)")
     print(parser.description)
