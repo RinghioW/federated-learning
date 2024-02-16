@@ -1,12 +1,13 @@
 import torch
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from config import DEVICE
 
 class Device():
-    def __init__(self, config, dataset, valset, model=None) -> None:
+    def __init__(self, config, dataset, valset) -> None:
         self.config = config
-        self.model = model
         self.dataset = dataset
         self.valset = valset
+        self.model = None
+        self.transition_matrix = None
 
     def __repr__(self) -> str:
         return f"Device(config={self.config})"

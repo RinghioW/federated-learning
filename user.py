@@ -2,19 +2,23 @@ import torchvision.models as models
 import torch.nn as nn
 import torch.optim as optim
 import torch
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+import numpy as np
+from config import DEVICE
 
 class User():
-    def __init__(self, devices, kd_dataset=None):
+    def __init__(self, devices, classes=10) -> None:
         self.devices = devices
-        self.kd_dataset = kd_dataset
+        self.kd_dataset = None
         self.model = None
+        # Transition matrix of ShuffleFL (size = number of classes x number of devices + 1)
+        # The additional column is for the kd_dataset
+        self.transition_matrices = [np.zeros((classes, len(devices) + 1)) for _ in range(len(devices))]
 
     # Adapt the model to the devices
     def adapt_model(self, model):
         self.model = model
         for device in self.devices:
+            # Adaptation is based on the device resources
             if device.config["compute"] < 5:
                 device.model = models.quantization.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT, quantize=False)
             elif device.config["compute"] < 10:
@@ -24,9 +28,14 @@ class User():
                 
     # Devices shuflle the data and create a knowledge distillation dataset
     def shuffle_data(self):
+
+        # Distribute the transition matrices
+        pass
+
         for devices in self.devices:
             # Shuffle the data
             pass
+
         # Create a knowledge distillation dataset
         kd_dataset = []
         for device in self.devices:
