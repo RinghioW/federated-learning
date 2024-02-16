@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-import os
 import numpy as np
 import argparse
 from device import Device

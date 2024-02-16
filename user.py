@@ -2,7 +2,6 @@ import torchvision.models as models
 import torch.nn as nn
 import torch.optim as optim
 import torch
-import torch.utils.data as tdata
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

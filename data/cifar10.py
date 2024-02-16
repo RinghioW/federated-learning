@@ -1,14 +1,4 @@
-from collections import OrderedDict
-from typing import List, Tuple
-
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.transforms as transforms
-from datasets.utils.logging import disable_progress_bar
-from torch.utils.data import DataLoader
-
 from flwr_datasets import FederatedDataset
 
 BATCH_SIZE = 32
