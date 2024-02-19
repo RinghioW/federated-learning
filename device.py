@@ -1,6 +1,6 @@
 import torch
 from config import DEVICE
-
+import numpy as np
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
@@ -11,6 +11,9 @@ class Device():
 
     def __repr__(self) -> str:
         return f"Device(config={self.config})"
+    
+    def data_imbalance(self):
+        pass
 
     def train(self, epochs=5, verbose=True):
         if self.model is None or self.dataset is None:

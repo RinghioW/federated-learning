@@ -59,16 +59,21 @@ def main():
         print(f"FL epoch {epoch+1}/{epochs}")
         # The server sends the model to the users
         for user in users:
+
             print(f"Adapting model for user {user}...")
+
+
             # Each user adapts the model for their devices
             user.adapt_model(server.model)
             print(f"Shuffling data for user {user}...")
+
             # Each user shuffles the data and creates a knowledge distillation dataset
+            # Also measure the data imbalance
             user.shuffle_data()
 
-            for device in user.devices:
-                print(f"Training device {device}...")
-                device.train(epochs=3)
+            # Train devices and measure the latency
+            user.train_devices(epochs=epochs, verbose=True)
+
             print(f"Aggregating updates from user {user}...")
             user.aggregate_updates()
         print(f"Updating server model...")

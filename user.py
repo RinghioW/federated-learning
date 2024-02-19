@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch
 import numpy as np
+import time
 from config import DEVICE
 
 class User():
@@ -10,9 +11,17 @@ class User():
         self.devices = devices
         self.kd_dataset = None
         self.model = None
+
+        # SHUFFLE-FL
+
         # Transition matrix of ShuffleFL (size = number of classes x number of devices + 1)
         # The additional column is for the kd_dataset
         self.transition_matrices = [np.zeros((classes, len(devices) + 1)) for _ in range(len(devices))]
+        
+        # System latencies for each device
+        self.system_latencies = [0.0 for _ in range(len(devices))]
+        self.adaptive_coefficient = 1.0
+        self.data_imbalances = [0.0 for _ in range(len(devices))]
 
     # Adapt the model to the devices
     def adapt_model(self, model):
@@ -28,13 +37,14 @@ class User():
                 
     # Devices shuflle the data and create a knowledge distillation dataset
     def shuffle_data(self):
-
         # Distribute the transition matrices
-        pass
-
-        for devices in self.devices:
+        for i, device in enumerate(self.devices):
+            
+            # Calculate the data imbalance for each device
+            self.data_imbalances[i] = device.data_imbalance()
             # Shuffle the data
-            pass
+            device.transition_matrix = self.transition_matrices[i]
+
 
         # Create a knowledge distillation dataset
         kd_dataset = []
@@ -87,3 +97,11 @@ class User():
                     running_loss += loss.item()
 
                 print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
+
+    def train_devices(self, epochs=5, verbose=True):
+        for i, device in enumerate(self.devices):
+            start_time = time.time()
+            device.train(epochs, verbose)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            self.system_latencies[i] = elapsed_time
