@@ -1,6 +1,7 @@
 import torch
-from config import DEVICE
+from config import DEVICE, NUM_CLASSES
 import numpy as np
+from utils import js_divergence
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
@@ -13,7 +14,12 @@ class Device():
         return f"Device(config={self.config})"
     
     def data_imbalance(self):
-        pass
+        # Calculate the reference data distribution
+        # The reference data distribution is a balanced distribution, all classes have the same number of samples
+        reference_distribution = np.array([len(self.dataset)/NUM_CLASSES for _ in range(NUM_CLASSES)])
+
+        # Compute the JS divergence between the reference distribution and the actual data distribution
+        return js_divergence(reference_distribution["labels"], self.dataset)
 
     def train(self, epochs=5, verbose=True):
         if self.model is None or self.dataset is None:

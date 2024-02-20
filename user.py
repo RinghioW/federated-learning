@@ -4,10 +4,10 @@ import torch.optim as optim
 import torch
 import numpy as np
 import time
-from config import DEVICE
+from config import DEVICE, NUM_CLASSES
 
 class User():
-    def __init__(self, devices, classes=10) -> None:
+    def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
         self.kd_dataset = None
         self.model = None
