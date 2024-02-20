@@ -39,13 +39,8 @@ class User():
     def shuffle_data(self):
         # Distribute the transition matrices
         for i, device in enumerate(self.devices):
-            
-            # Calculate the data imbalance for each device
-            self.data_imbalances[i] = device.data_imbalance()
             # Shuffle the data
             device.transition_matrix = self.transition_matrices[i]
-
-
         # Create a knowledge distillation dataset
         kd_dataset = []
         for device in self.devices:
@@ -100,8 +95,12 @@ class User():
 
     def train_devices(self, epochs=5, verbose=True):
         for i, device in enumerate(self.devices):
-            start_time = time.time()
             device.train(epochs, verbose)
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            self.system_latencies[i] = elapsed_time
+    
+    def latency_devices(self, epochs):
+        for i, device in enumerate(self.devices):
+            self.system_latencies[i] = device.latency(epochs)
+    
+    def data_imbalance_devices(self):
+        for i, device in enumerate(self.devices):
+            self.data_imbalances[i] = device.data_imbalance()

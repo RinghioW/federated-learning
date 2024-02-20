@@ -38,7 +38,8 @@ def main():
     configs = [{"compute" : np.random.randint(1, 15),
                 "memory" : np.random.randint(1, 15),
                 "energy_budget" : np.random.randint(1,15),
-                "communication_bandwidth" : np.random.randint(1,15) 
+                "uplink" : np.random.randint(1,15),
+                "downlink" : np.random.randint(1,15) 
                 } for _ in range(num_devices)]
 
     # Create devices and users
@@ -57,23 +58,27 @@ def main():
     # Perform federated learning for the server model
     for epoch in range(epochs):
         print(f"FL epoch {epoch+1}/{epochs}")
-        # The server sends the model to the users
+        # Server sends the model to the users
         for user in users:
 
+            # User adapts the model for their devices
             print(f"Adapting model for user {user}...")
-
-
-            # Each user adapts the model for their devices
             user.adapt_model(server.model)
+            
+            # User measures the data imbalance
+            user.data_imbalance_devices()
+            
+            # User shuffles the data and creates a knowledge distillation dataset
             print(f"Shuffling data for user {user}...")
-
-            # Each user shuffles the data and creates a knowledge distillation dataset
-            # Also measure the data imbalance
             user.shuffle_data()
 
-            # Train devices and measure the latency
-            user.train_devices(epochs=epochs, verbose=True)
+            # User measures the system latencies
+            user.latency_devices(epochs=3)
 
+            # User trains devices
+            user.train_devices(epochs=3, verbose=True)
+
+            # User trains the model using knowledge distillation
             print(f"Aggregating updates from user {user}...")
             user.aggregate_updates()
         print(f"Updating server model...")
