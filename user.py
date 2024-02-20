@@ -101,8 +101,8 @@ class User():
         # Communication depends on the transition matrix
         t_communication = 0
         for i, device in enumerate(self.devices):
-            for j, data_class in device.transition_matrix:
-                for i_hat, other_device in self.devices:
+            for j, data_class in enumerate(device.transition_matrix):
+                for i_hat, other_device in enumerate(self.devices):
                     if i != i_hat:
                         # Transmitting
                         t_communication += device.transition_matrix[j][i_hat] * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))

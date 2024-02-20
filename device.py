@@ -22,6 +22,21 @@ class Device():
         return js_divergence(reference_distribution["labels"], self.dataset)
     
 
+    def latency(self, device_idx, transmission_matrices, epochs):
+        # Communication depends on the transition matrix
+        t_communication = 0
+        for j, data_class in enumerate(self.transition_matrix):
+            for i_hat, other_device in enumerate(self.devices):
+                if device_idx != i_hat:
+                    # Transmitting
+                    t_communication += self.transition_matrix[j][i_hat] * ((1/self.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
+                    # Receiving
+                    t_communication += other_device.transition_matrix[j][device_idx] * ((1/self.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
+        t_computation = 0
+        
+        t_computation += 3 * epochs * len(self.dataset) * self.config["compute"]
+        return t_communication + t_computation
+
     def train(self, epochs=5, verbose=True):
         if self.model is None or self.dataset is None:
             raise ValueError("Model or dataset is None.")
