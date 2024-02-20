@@ -98,8 +98,20 @@ class User():
             device.train(epochs, verbose)
     
     def latency_devices(self, epochs):
+        # Communication depends on the transition matrix
+        t_communication = 0
         for i, device in enumerate(self.devices):
-            self.system_latencies[i] = device.latency(epochs)
+            for j, data_class in device.transition_matrix:
+                for i_hat, other_device in self.devices:
+                    if i != i_hat:
+                        # Transmitting
+                        t_communication += device.transition_matrix[j][i_hat] * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
+                        # Receiving
+                        t_communication += other_device.transition_matrix[j][i] * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
+        t_computation = 0
+        for device in self.devices:
+            t_computation += 3 * epochs * len(device.dataset) * device.config["compute"]
+        return t_communication + t_computation
     
     def data_imbalance_devices(self):
         for i, device in enumerate(self.devices):

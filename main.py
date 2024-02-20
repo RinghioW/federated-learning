@@ -38,8 +38,8 @@ def main():
     configs = [{"compute" : np.random.randint(1, 15),
                 "memory" : np.random.randint(1, 15),
                 "energy_budget" : np.random.randint(1,15),
-                "uplink" : np.random.randint(1,15),
-                "downlink" : np.random.randint(1,15) 
+                "uplink_rate" : np.random.randint(1,15),
+                "downlink_rate" : np.random.randint(1,15) 
                 } for _ in range(num_devices)]
 
     # Create devices and users

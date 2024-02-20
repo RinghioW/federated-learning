@@ -21,10 +21,6 @@ class Device():
         # Compute the JS divergence between the reference distribution and the actual data distribution
         return js_divergence(reference_distribution["labels"], self.dataset)
     
-    def latency(self, epochs):
-        t_communication = self.config["uplink"] + self.config["downlink"]
-        t_computation = 3 * epochs * len(self.dataset) * self.config["compute"]
-        return t_communication + t_computation
 
     def train(self, epochs=5, verbose=True):
         if self.model is None or self.dataset is None:
