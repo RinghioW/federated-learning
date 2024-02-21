@@ -2,6 +2,7 @@ import torch
 from config import DEVICE, NUM_CLASSES
 import numpy as np
 from utils import js_divergence
+import pandas as pd
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
@@ -20,9 +21,9 @@ class Device():
 
         # Compute the JS divergence between the reference distribution and the actual data distribution
         dataloader = torch.utils.data.DataLoader(self.dataset)
-        distribution = []
-        for item in dataloader:
-            distribution.append(item["label"])
+        distribution = [0 for _ in range(NUM_CLASSES)]
+        for element in dataloader:
+            distribution[element["label"]] += 1
         return js_divergence(np.array(reference_distribution), np.array(distribution))
     
 
