@@ -66,7 +66,7 @@ def main():
             user.adapt_model(server.model)
             
             # User measures the data imbalance
-            # user.data_imbalance_devices()
+            user.data_imbalance_devices()
             
             # User shuffles the data and creates a knowledge distillation dataset
             print(f"Shuffling data for user {user}...")

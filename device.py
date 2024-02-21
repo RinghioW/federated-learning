@@ -16,10 +16,14 @@ class Device():
     def data_imbalance(self):
         # Calculate the reference data distribution
         # The reference data distribution is a balanced distribution, all classes have the same number of samples
-        reference_distribution = np.array([len(self.dataset)/NUM_CLASSES for _ in range(NUM_CLASSES)])
+        reference_distribution = [len(self.dataset)/NUM_CLASSES for _ in range(NUM_CLASSES)]
 
         # Compute the JS divergence between the reference distribution and the actual data distribution
-        return js_divergence(reference_distribution, self.dataset["label"])
+        dataloader = torch.utils.data.DataLoader(self.dataset)
+        distribution = []
+        for item in dataloader:
+            distribution.append(item["label"])
+        return js_divergence(np.array(reference_distribution), np.array(distribution))
     
 
     def latency(self, device_idx, devices, epochs):
