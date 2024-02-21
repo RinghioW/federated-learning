@@ -33,7 +33,7 @@ def main():
         trainsets, valsets, testset = load_datasets(num_devices)
     else:
         pass # Add more datasets here
-    
+
     # Create device configurations
     configs = [{"compute" : np.random.randint(1, 15),
                 "memory" : np.random.randint(1, 15),
@@ -59,28 +59,31 @@ def main():
     for epoch in range(epochs):
         print(f"FL epoch {epoch+1}/{epochs}")
         # Server sends the model to the users
-        for user in users:
+        for user_idx, user in enumerate(users):
 
             # User adapts the model for their devices
-            print(f"Adapting model for user {user}...")
+            print(f"Adapting model for user {user_idx}...")
             user.adapt_model(server.model)
             
             # User measures the data imbalance
             user.data_imbalance_devices()
-            
+            print(f"Data imbalance for user {user_idx}: {user.data_imbalances}")
+
             # User shuffles the data and creates a knowledge distillation dataset
-            print(f"Shuffling data for user {user}...")
+            print(f"Shuffling data for user {user_idx}...")
             user.shuffle_data()
 
             # User measures the system latencies
             user.latency_devices(epochs=3)
+            print(f"System latencies for user {user_idx}: {user.system_latencies}")
 
             # User trains devices
             user.train_devices(epochs=3, verbose=True)
 
             # User trains the model using knowledge distillation
-            print(f"Aggregating updates from user {user}...")
+            print(f"Aggregating updates from user {user_idx}...")
             user.aggregate_updates()
+
         print(f"Updating server model...")
         server.aggregate_updates(users)
         print(f"Evaluating trained server model...")
