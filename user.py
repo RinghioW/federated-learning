@@ -94,25 +94,31 @@ class User():
                 print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
 
     def train_devices(self, epochs=5, verbose=True):
-        for i, device in enumerate(self.devices):
+        for device in self.devices:
             device.train(epochs, verbose)
     
-    def latency_devices(self, epochs):
+    def total_latency_devices(self, epochs):
         # Communication depends on the transition matrix
         t_communication = 0
-        for i, device in enumerate(self.devices):
-            for j, data_class in enumerate(device.transition_matrix):
-                for i_hat, other_device in enumerate(self.devices):
-                    if i != i_hat:
+        for device_idx, device in enumerate(self.devices):
+            for data_class_idx, data_class in enumerate(device.transition_matrix):
+                for other_device_idx, other_device in enumerate(self.devices):
+                    if device_idx != other_device_idx:
                         # Transmitting
-                        t_communication += device.transition_matrix[j][i_hat] * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
+                        t_communication += device.transition_matrix[data_class_idx][other_device_idx] * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
                         # Receiving
-                        t_communication += other_device.transition_matrix[j][i] * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
+                        t_communication += other_device.transition_matrix[data_class_idx][device_idx] * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
         t_computation = 0
         for device in self.devices:
             t_computation += 3 * epochs * len(device.dataset) * device.config["compute"]
         return t_communication + t_computation
     
+    def latency_devices(self, epochs):
+        for i, device in enumerate(self.devices):
+            self.system_latencies[i] = device.latency(devices=self.devices, device_idx=i, epochs=epochs)
+        return self.system_latencies
+    
     def data_imbalance_devices(self):
         for i, device in enumerate(self.devices):
             self.data_imbalances[i] = device.data_imbalance()
+        return self.data_imbalances

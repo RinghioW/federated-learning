@@ -39,7 +39,7 @@ def main():
                 "memory" : np.random.randint(1, 15),
                 "energy_budget" : np.random.randint(1,15),
                 "uplink_rate" : np.random.randint(1,15),
-                "downlink_rate" : np.random.randint(1,15) 
+                "downlink_rate" : np.random.randint(1,15)
                 } for _ in range(num_devices)]
 
     # Create devices and users
@@ -66,7 +66,7 @@ def main():
             user.adapt_model(server.model)
             
             # User measures the data imbalance
-            user.data_imbalance_devices()
+            # user.data_imbalance_devices()
             
             # User shuffles the data and creates a knowledge distillation dataset
             print(f"Shuffling data for user {user}...")
@@ -88,7 +88,7 @@ def main():
         print(f"Final Loss: {loss}, Final Accuracy: {accuracy}")
 
     time_end = time.time()
-    print(f"Done. Elapsed time: {time_end - time_start} seconds.")
+    print(f"Elapsed time: {time_end - time_start} seconds. Done.")
 
 if __name__ == "__main__":
     main()

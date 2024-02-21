@@ -19,21 +19,20 @@ class Device():
         reference_distribution = np.array([len(self.dataset)/NUM_CLASSES for _ in range(NUM_CLASSES)])
 
         # Compute the JS divergence between the reference distribution and the actual data distribution
-        return js_divergence(reference_distribution["labels"], self.dataset)
+        return js_divergence(reference_distribution, self.dataset["label"])
     
 
-    def latency(self, device_idx, transmission_matrices, epochs):
+    def latency(self, device_idx, devices, epochs):
         # Communication depends on the transition matrix
         t_communication = 0
-        for j, data_class in enumerate(self.transition_matrix):
-            for i_hat, other_device in enumerate(self.devices):
-                if device_idx != i_hat:
+        for data_class_idx, data_class in enumerate(self.transition_matrix):
+            for other_device_idx, other_device in enumerate(devices):
+                if device_idx != other_device_idx:
                     # Transmitting
-                    t_communication += self.transition_matrix[j][i_hat] * ((1/self.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
+                    t_communication += self.transition_matrix[data_class_idx][other_device_idx] * ((1/self.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
                     # Receiving
-                    t_communication += other_device.transition_matrix[j][device_idx] * ((1/self.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
+                    t_communication += other_device.transition_matrix[data_class_idx][device_idx] * ((1/self.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
         t_computation = 0
-        
         t_computation += 3 * epochs * len(self.dataset) * self.config["compute"]
         return t_communication + t_computation
 
