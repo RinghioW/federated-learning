@@ -3,12 +3,14 @@ import torch
 from config import DEVICE
 
 class Server():
-    def __init__(self, dataset) -> None:
+    def __init__(self, users, dataset) -> None:
         if dataset == "cifar10":
             self.model = models.mobilenet_v3_large()
         else:
             raise ValueError(f"Invalid dataset. Please choose from valid datasets")
-        
+        self.users = users
+        self.wall_clock_training_times = None
+
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient
     def aggregate_updates(self, users):
@@ -39,3 +41,9 @@ class Server():
         loss /= len(testloader.dataset)
         accuracy = correct / total
         return loss, accuracy
+    
+    def send_adaptive_coefficient(self, user):
+        # Use the wall clock training times to calculate the adaptive coefficient
+        adaptive_coefficient = self.wall_clock_training_times[user]
+        user.adaptive_coefficient = 1.0
+        return user.adaptive_coefficient

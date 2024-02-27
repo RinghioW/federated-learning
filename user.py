@@ -122,3 +122,6 @@ class User():
         for i, device in enumerate(self.devices):
             self.data_imbalances[i] = device.data_imbalance()
         return self.data_imbalances
+    
+    def optimize_transmission_matrix():
+        pass

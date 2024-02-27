@@ -27,6 +27,10 @@ def main():
     if dataset not in datasets:
         raise ValueError(f"Invalid dataset. Please choose from {datasets}")
     
+
+    # Number of epochs for on-device trianing
+    device_epochs = 3
+
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
         from data.cifar10 import load_datasets
@@ -46,7 +50,7 @@ def main():
     devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
     devices_grouped = np.array_split(devices, num_users)
     users = [User(devices_grouped[i]) for i in range(num_users)]
-    server = Server(dataset)
+    server = Server(users, dataset)
 
     time_start = time.time()
     
@@ -60,9 +64,11 @@ def main():
         print(f"FL epoch {epoch+1}/{epochs}")
         # Server sends the model to the users
         for user_idx, user in enumerate(users):
+            # The server sends the adaptive coefficient to the users
+            server.send_adaptive_coefficient(user)
 
             # User adapts the model for their devices
-            print(f"Adapting model for user {user_idx}...")
+            print(f"Adapting model for user {user_idx+1}/{len(users)}...")
             user.adapt_model(server.model)
             
             # User measures the data imbalance
@@ -74,11 +80,11 @@ def main():
             user.shuffle_data()
 
             # User measures the system latencies
-            user.latency_devices(epochs=3)
+            user.latency_devices(epochs=device_epochs)
             print(f"System latencies for user {user_idx}: {user.system_latencies}")
 
             # User trains devices
-            user.train_devices(epochs=3, verbose=True)
+            user.train_devices(epochs=device_epochs, verbose=True)
 
             # User trains the model using knowledge distillation
             print(f"Aggregating updates from user {user_idx}...")
@@ -86,6 +92,7 @@ def main():
 
         print(f"Updating server model...")
         server.aggregate_updates(users)
+
         print(f"Evaluating trained server model...")
         loss, accuracy = server.evaluate(testset)
         print(f"Final Loss: {loss}, Final Accuracy: {accuracy}")
