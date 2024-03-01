@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import time
 from config import DEVICE, NUM_CLASSES
+from scipy.optimize import minimize
 
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
@@ -16,12 +17,12 @@ class User():
 
         # Transition matrix of ShuffleFL (size = number of classes x number of devices + 1)
         # The additional column is for the kd_dataset
-        self.transition_matrices = [np.zeros((classes, len(devices) + 1)) for _ in range(len(devices))]
+        self.transition_matrices = [np.zeros((classes, len(devices) + 1)) for _ in devices]
         
         # System latencies for each device
-        self.system_latencies = [0.0 for _ in range(len(devices))]
+        self.system_latencies = [0.0 for _ in devices]
         self.adaptive_coefficient = 1.0
-        self.data_imbalances = [0.0 for _ in range(len(devices))]
+        self.data_imbalances = [0.0 for _ in devices]
 
     # Adapt the model to the devices
     def adapt_model(self, model):
@@ -122,6 +123,28 @@ class User():
         for i, device in enumerate(self.devices):
             self.data_imbalances[i] = device.data_imbalance()
         return self.data_imbalances
-    
+
     def optimize_transmission_matrix():
-        pass
+
+        # Define the objective function to optimize
+        def objective_func(flat_variables, data_distribution_list, sys_profile_list, known_params, balance_weight, rate_balance_weight):
+            """
+            :param variables: Transfer matrix, each element is a probability
+            :param data_distribution_list: Data distribution for each device from one user
+            :param sys_profile_list: System capacity in a list for each device from one user
+            :param known_params: [batch_size, local_epochs, size of each data sample (bit)]
+            :param balance_weight: balance between time cost and js divergence
+            :param rate_balance_weight: ratio from sever for balance weight
+            :return:
+            """
+            # Reshape the flat variables back to their original shapes
+            variables = np.array(flat_variables).reshape(len(data_distribution_list), -1, len(data_distribution_list))
+            x_params_list = [np.dot(data_distribution_list[i], variable) for i, variable in enumerate(variables)]
+            js_list, sys_time_comm, sys_time_comp = multilogic_create(x_params_list, sys_profile_list, known_params)
+            sys_time = sys_time_comm + sys_time_comp
+            # print (np.std(sys_time), np.max(sys_time), np.max(js_list))
+            # print (sys_time_comm, sys_time_comp)
+            return 10*np.std(sys_time) + np.max(sys_time) + (balance_weight * rate_balance_weight) * np.max(js_list)
+        
+        result = minimize(objective_func, x0, args=(data_distribution_list, sys_profile_list, known_params, balance_weight, rate_balance_weight), method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'iprint': 1, 'disp': True})
+        return result.x, result.fun
