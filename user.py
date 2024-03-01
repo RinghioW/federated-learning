@@ -126,6 +126,9 @@ class User():
 
     def optimize_transmission_matrix():
 
+        def multilogic_create(x_params_list, sys_profile_list, known_params):
+            pass
+        
         # Define the objective function to optimize
         def objective_func(flat_variables, data_distribution_list, sys_profile_list, known_params, balance_weight, rate_balance_weight):
             """
