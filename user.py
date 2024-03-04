@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch
 import numpy as np
 import time
-from config import DEVICE, NUM_CLASSES
+from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
 
 class User():
@@ -17,12 +17,16 @@ class User():
 
         # Transition matrix of ShuffleFL (size = number of classes x number of devices + 1)
         # The additional column is for the kd_dataset
+        # Also used by equation 7 as the optimization variable for the argmin
         self.transition_matrices = [np.zeros((classes, len(devices) + 1)) for _ in devices]
         
         # System latencies for each device
         self.system_latencies = [0.0 for _ in devices]
         self.adaptive_coefficient = 1.0
         self.data_imbalances = [0.0 for _ in devices]
+
+        # Shrinkage ration for reducing the classes in the transition matrix
+        self.shrinkage_ratio = 0.
 
     # Adapt the model to the devices
     def adapt_model(self, model):
@@ -91,7 +95,6 @@ class User():
                     optimizer.step()
 
                     running_loss += loss.item()
-
                 print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
 
     def train_devices(self, epochs=5, verbose=True):
@@ -123,31 +126,67 @@ class User():
         for i, device in enumerate(self.devices):
             self.data_imbalances[i] = device.data_imbalance()
         return self.data_imbalances
-
-    def optimize_transmission_matrix():
-
-        def multilogic_create(x_params_list, sys_profile_list, known_params):
+    
+    def transfer(self, transition_matrices):
+        # Each device sends data according to the respective transition matrix
+        for transition_matrix, device in zip(transition_matrices, self.devices):
             pass
-        
+
+    # Function for optimizing equation 7 from ShuffleFL
+    def optimize_transmission_matrix(self):
         # Define the objective function to optimize
-        def objective_func(flat_variables, data_distribution_list, sys_profile_list, known_params, balance_weight, rate_balance_weight):
-            """
-            :param variables: Transfer matrix, each element is a probability
-            :param data_distribution_list: Data distribution for each device from one user
-            :param sys_profile_list: System capacity in a list for each device from one user
-            :param known_params: [batch_size, local_epochs, size of each data sample (bit)]
-            :param balance_weight: balance between time cost and js divergence
-            :param rate_balance_weight: ratio from sever for balance weight
-            :return:
-            """
+        # Takes as an input the transfer matrices
+        # Returns as an output the result of Equation 7
+        def objective_function(x, epochs=3):
+            
+            # Parse args
+            transfer_matrices = x
+
+            # Store the current status of the devices
+            current_data = []
+            for device in self.devices:
+                current_data.append(device.dataset)
+
+            # Transfer the data according to the matrices
+            self.transfer(transfer_matrices)
+
+            # Compute the resulting system latencies and data imbalances
+            latencies = self.latency_devices(epochs=3)
+            data_imbalances = self.data_imbalance_devices()
+
+            # Restore the original status of the devices
+            for i, device in enumerate(self.devices):
+                device.dataset = current_data[i]
+
+            # Compute the loss function
+            # The factor of 10 was introduced to increase by an order of magnitude the importance of the time std
+            # Time std is usually very small and the max time is usually very large
+            # But a better approach would be to normalize the values or take the square of the std
+            return STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_coefficient*np.max(data_imbalances)
+
+        # Define the constraints for the optimization
+        def constraint_row_sum(flat_variables, device_num, class_num):
             # Reshape the flat variables back to their original shapes
-            variables = np.array(flat_variables).reshape(len(data_distribution_list), -1, len(data_distribution_list))
-            x_params_list = [np.dot(data_distribution_list[i], variable) for i, variable in enumerate(variables)]
-            js_list, sys_time_comm, sys_time_comp = multilogic_create(x_params_list, sys_profile_list, known_params)
-            sys_time = sys_time_comm + sys_time_comp
-            # print (np.std(sys_time), np.max(sys_time), np.max(js_list))
-            # print (sys_time_comm, sys_time_comp)
-            return 10*np.std(sys_time) + np.max(sys_time) + (balance_weight * rate_balance_weight) * np.max(js_list)
+            variables = flat_variables.reshape((device_num, class_num, device_num))
+
+            # Calculate the row sums for each matrix and ensure they sum to 1
+            row_sums = []
+            for x in variables:
+                row_sum = np.sum(x, axis=1)
+                row_sums.extend(row_sum - 1.)
+            return row_sums
         
-        result = minimize(objective_func, x0, args=(data_distribution_list, sys_profile_list, known_params, balance_weight, rate_balance_weight), method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'iprint': 1, 'disp': True})
+        def constraint_matrix_elements(variables):
+            return variables
+        
+        initial_transfer_matrices = [np.ones((NUM_CLASSES, len(self.devices), len(self.devices))) for _ in self.devices]
+        n_device = np.array(x0).shape[0]
+        n_class = np.array(x0).shape[1]
+        n_var = n_device * n_class * n_device
+        bounds = [(0, 1)] * n_var
+        constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, n_device, n_class)},
+                       {'type': 'ineq', 'fun': lambda variables: constraint_matrix_elements(variables)},]
+        
+        x0 = np.array(x0).flatten()
+        result = minimize(objective_function, x0=initial_transfer_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'iprint': 1, 'disp': True})
         return result.x, result.fun
