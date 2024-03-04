@@ -52,6 +52,9 @@ def main():
     users = [User(devices_grouped[i]) for i in range(num_users)]
     server = Server(users, dataset)
 
+    # Users initialize transition matrices
+    for user in users:
+        user.initialize_transition_matrices()
     time_start = time.time()
     
     # Evaluate the server model before training
@@ -72,11 +75,11 @@ def main():
             user.adapt_model(server.model)
             
             # User optimizes the transmission matrices
-            print(f"Optimizing transmission matrices for user {user_idx}...")
+            print(f"Optimizing transition matrices for user {user_idx+1}...")
             user.optimize_transmission_matrices()
 
             # User shuffles the data and creates a knowledge distillation dataset
-            print(f"Shuffling data for user {user_idx}...")
+            print(f"Shuffling data for user {user_idx+1}...")
             user.shuffle_data()
 
             # User measures the system latencies

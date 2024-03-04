@@ -3,6 +3,8 @@ from config import DEVICE, NUM_CLASSES
 import numpy as np
 from utils import js_divergence
 import pandas as pd
+import math
+
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
@@ -26,6 +28,9 @@ class Device():
             distribution[element["label"]] += 1
         return js_divergence(np.array(reference_distribution), np.array(distribution))
     
+
+    def initialize_transition_matrix(self, num_devices):
+        self.transition_matrix = np.ones((NUM_CLASSES, num_devices), dtype=int)
 
     def latency(self, device_idx, devices, epochs):
         # Communication depends on the transition matrix
@@ -70,13 +75,13 @@ class Device():
 
     def remove_data(self, data_class, amount):
         samples = []
-        for _ in range(amount):
+        for _ in range(math.floor(amount)):
             for idx, sample in enumerate(self.dataset):
                 if sample["label"] == data_class:
                     samples.append(sample)
-                    self.dataset.pop(idx)
+                    np.delete(self.dataset, idx)
                     break
             return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
 
     def add_data(self, sample):
-        self.dataset.append(sample)
+        np.append(self.dataset, sample)

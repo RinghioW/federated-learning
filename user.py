@@ -18,7 +18,7 @@ class User():
         # Transition matrix of ShuffleFL (size = number of classes x number of devices + 1)
         # The additional column is for the kd_dataset
         # Also used by equation 7 as the optimization variable for the argmin
-        self.transition_matrices = [np.zeros((classes, len(devices) + 1)) for _ in devices]
+        self.transition_matrices = [np.ones((classes, len(devices) + 1), dtype=int) for _ in devices]
         
         # System latencies for each device
         self.system_latencies = [0.0 for _ in devices]
@@ -55,6 +55,9 @@ class User():
             kd_dataset.append(device.valset)
         self.kd_dataset = kd_dataset
 
+    def initialize_transition_matrices(self):
+        for device in self.devices:
+            device.initialize_transition_matrix(num_devices=len(self.devices))
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
@@ -130,8 +133,9 @@ class User():
             self.data_imbalances[i] = device.data_imbalance()
         return self.data_imbalances
     
-    def send_data(self, sender, sample_class, receiver, amount):
+    def send_data(self, sender, sample_class, receiver_idx, amount):
         sample = sender.remove_data(sample_class, amount)
+        receiver = self.devices[receiver_idx]
         receiver.add_data(sample)
         return sample
 
@@ -152,7 +156,7 @@ class User():
         def objective_function(x):
             
             # Parse args
-            transfer_matrices = x
+            transfer_matrices = x.reshape((len(self.devices), NUM_CLASSES, len(self.devices)))
 
             # Store the current status of the devices
             current_data = []
@@ -191,14 +195,16 @@ class User():
         def constraint_matrix_elements(variables):
             return variables
         
-        initial_transfer_matrices = [np.ones((NUM_CLASSES, len(self.devices), len(self.devices))) for _ in self.devices]
-        n_device = np.array(x0).shape[0]
-        n_class = np.array(x0).shape[1]
+        initial_transfer_matrices = [np.ones((NUM_CLASSES, len(self.devices)), dtype=int) for _ in self.devices]
+        initial_transfer_matrices = np.array(initial_transfer_matrices, dtype=int).flatten()
+
+        n_device = len(self.devices)
+        n_class = NUM_CLASSES
+
         n_var = n_device * n_class * n_device
         bounds = [(0, 1)] * n_var
         constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, n_device, n_class)},
                        {'type': 'ineq', 'fun': lambda variables: constraint_matrix_elements(variables)},]
         
-        x0 = np.array(x0).flatten()
         result = minimize(objective_function, x0=initial_transfer_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'iprint': 1, 'disp': True})
         return result.x, result.fun
