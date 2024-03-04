@@ -81,6 +81,7 @@ class Device():
                     samples.append(sample)
                     np.delete(self.dataset, idx)
                     break
+            print("Warning! Not enough samples")
             return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
 
     def add_data(self, sample):

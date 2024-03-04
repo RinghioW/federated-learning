@@ -154,7 +154,7 @@ class User():
         # Takes as an input the transfer matrices
         # Returns as an output the result of Equation 7
         def objective_function(x):
-            
+            print("In the obj function")
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), NUM_CLASSES, len(self.devices)))
 
@@ -206,5 +206,5 @@ class User():
         constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, n_device, n_class)},
                        {'type': 'ineq', 'fun': lambda variables: constraint_matrix_elements(variables)},]
         
-        result = minimize(objective_function, x0=initial_transfer_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'iprint': 1, 'disp': True})
+        result = minimize(objective_function, x0=initial_transfer_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
         return result.x, result.fun
