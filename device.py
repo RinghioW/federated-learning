@@ -67,3 +67,16 @@ class Device():
             epoch_acc = correct / total
             if verbose:
                 print(f"Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
+
+    def remove_data(self, data_class, amount):
+        samples = []
+        for _ in range(amount):
+            for idx, sample in enumerate(self.dataset):
+                if sample["label"] == data_class:
+                    samples.append(sample)
+                    self.dataset.pop(idx)
+                    break
+            return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
+
+    def add_data(self, sample):
+        self.dataset.append(sample)

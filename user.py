@@ -28,6 +28,9 @@ class User():
         # Shrinkage ration for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.
 
+        # Staleness factor
+        staleness_factor = 0.0
+
     # Adapt the model to the devices
     def adapt_model(self, model):
         self.model = model
@@ -127,19 +130,26 @@ class User():
             self.data_imbalances[i] = device.data_imbalance()
         return self.data_imbalances
     
+    def send_data(self, sender, sample_class, receiver, amount):
+        sample = sender.remove_data(sample_class, amount)
+        receiver.add_data(sample)
+        return sample
+
     def transfer(self, transition_matrices):
         # Each device sends data according to the respective transition matrix
         for transition_matrix, device in zip(transition_matrices, self.devices):
-            
-            for data_class_idx, data_class in enumerate(transition_matrix):
-                pass
+            for i in range(len(transition_matrix)):
+                for j in range(len(transition_matrix[0])):
+                    if i != j:
+                        # Send data from class i to device j
+                        self.send_data(device, i, j, transition_matrix[i][j])
 
     # Function for optimizing equation 7 from ShuffleFL
     def optimize_transmission_matrices(self):
         # Define the objective function to optimize
         # Takes as an input the transfer matrices
         # Returns as an output the result of Equation 7
-        def objective_function(x, epochs=3):
+        def objective_function(x):
             
             # Parse args
             transfer_matrices = x
@@ -153,7 +163,7 @@ class User():
             self.transfer(transfer_matrices)
 
             # Compute the resulting system latencies and data imbalances
-            latencies = self.latency_devices(epochs=3)
+            latencies = self.latency_devices(epochs=1)
             data_imbalances = self.data_imbalance_devices()
 
             # Restore the original status of the devices
