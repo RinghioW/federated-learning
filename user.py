@@ -130,10 +130,12 @@ class User():
     def transfer(self, transition_matrices):
         # Each device sends data according to the respective transition matrix
         for transition_matrix, device in zip(transition_matrices, self.devices):
-            pass
+            
+            for data_class_idx, data_class in enumerate(transition_matrix):
+                pass
 
     # Function for optimizing equation 7 from ShuffleFL
-    def optimize_transmission_matrix(self):
+    def optimize_transmission_matrices(self):
         # Define the objective function to optimize
         # Takes as an input the transfer matrices
         # Returns as an output the result of Equation 7

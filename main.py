@@ -71,9 +71,9 @@ def main():
             print(f"Adapting model for user {user_idx+1}/{len(users)}...")
             user.adapt_model(server.model)
             
-            # User measures the data imbalance
-            user.data_imbalance_devices()
-            print(f"Data imbalance for user {user_idx}: {user.data_imbalances}")
+            # User optimizes the transmission matrices
+            print(f"Optimizing transmission matrices for user {user_idx}...")
+            user.optimize_transmission_matrices()
 
             # User shuffles the data and creates a knowledge distillation dataset
             print(f"Shuffling data for user {user_idx}...")
@@ -82,6 +82,10 @@ def main():
             # User measures the system latencies
             user.latency_devices(epochs=device_epochs)
             print(f"System latencies for user {user_idx}: {user.system_latencies}")
+
+            # User measures the data imbalance
+            user.data_imbalance_devices()
+            print(f"Data imbalance for user {user_idx}: {user.data_imbalances}")
 
             # User trains devices
             user.train_devices(epochs=device_epochs, verbose=True)
