@@ -52,18 +52,6 @@ class User():
                 device.model = models.quantization.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT, quantize=False)
             else:
                 device.model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-                
-    # Devices shuflle the data and create a knowledge distillation dataset
-    def shuffle_data(self):
-        # Distribute the transition matrices
-        for i, device in enumerate(self.devices):
-            # Shuffle the data
-            device.transition_matrix = self.transition_matrices[i]
-        # Create a knowledge distillation dataset
-        kd_dataset = []
-        for device in self.devices:
-            kd_dataset.append(device.valset)
-        self.kd_dataset = kd_dataset
 
     def initialize_transition_matrices(self):
         for device in self.devices:
@@ -151,7 +139,12 @@ class User():
         receiver.add_data(sample)
         return sample
 
-    def transfer(self, transition_matrices):
+    # Shuffle data between devices according to the transition matrices
+    # Implements the transformation described by Equation 1 from ShuffleFL
+    def shuffle_data(self, transition_matrices):
+        # TODO: Implement the knowledge distillation dataset
+        pass
+
         # Each device sends data according to the respective transition matrix
         for transition_matrix, device in zip(transition_matrices, self.devices):
             for i in range(len(transition_matrix)):
@@ -175,7 +168,7 @@ class User():
                 current_data.append(device.dataset)
 
             # Transfer the data according to the matrices
-            self.transfer(transfer_matrices)
+            self.shuffle_data(transfer_matrices)
 
             # Compute the resulting system latencies and data imbalances
             latencies = self.latency_devices(epochs=1)
@@ -220,8 +213,10 @@ class User():
         result = minimize(objective_function, x0=initial_transfer_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
         return result.x, result.fun
 
+    # Compute the average capability of the user compared to last round
+    # Implements Equation 8 and Equation 9 from ShuffleFL 
     def update_average_capability(self):
-        # Compute current average power
+        # Compute current average power and bandwidth and full dataset size
         average_power = 0.
         average_bandwidth = 0.
         dataset_size = 0
@@ -238,6 +233,8 @@ class User():
 
         # Equation 9 in ShuffleFL
         self.capability_coefficient = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
+        
+        # Equation 8 in ShuffleFL
         self.average_capability = self.capability_coefficient * (average_power / self.average_power) + (1. - self.capability_coefficient) * (average_bandwidth / self.average_bandwidth)
         # Update the average capability
         self.average_power = average_power

@@ -33,7 +33,6 @@ class Device():
 
         # Equation 3 from ShuffleFL
         return js_divergence(np.array(reference_distribution), np.array(distribution))
-    
 
     def initialize_transition_matrix(self, num_devices):
         self.transition_matrix = np.ones((NUM_CLASSES, num_devices), dtype=int)
