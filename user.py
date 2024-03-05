@@ -26,7 +26,7 @@ class User():
         self.data_imbalances = [0.0 for _ in devices]
 
         # Shrinkage ration for reducing the classes in the transition matrix
-        self.shrinkage_ratio = 0.
+        self.shrinkage_ratio = 1.
 
         # Staleness factor
         self.staleness_factor = 0.0
@@ -36,6 +36,9 @@ class User():
         self.average_power = 0.0
         self.average_bandwidth = 0.0
         self.capability_coefficient = 0.0
+
+        # Reduced transition matrices
+        self.reduced_transition_matrices = [np.ones((classes*self.shrinkage_ratio, len(devices) + 1), dtype=int) for _ in devices]
 
     # Adapt the model to the devices
     def adapt_model(self, model):
@@ -238,3 +241,14 @@ class User():
         # Update the average capability
         self.average_power = average_power
         self.average_bandwidth = average_bandwidth
+
+    # Reduce the dimensionality of the transition matrices using the shrinkage ratio
+    # In order to reduce the complexity of the shuffling algorithm
+    # Implements section 4.4 from ShuffleFL
+
+    def reduce_classes(self):
+        # Use t-SNE to embed the hidden eatures into a 2-dimensional space
+        pass
+
+        # Use k-means to cluster the data into k groups
+        pass
