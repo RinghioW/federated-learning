@@ -10,6 +10,7 @@ class Server():
             raise ValueError(f"Invalid dataset. Please choose from valid datasets")
         self.users = users
         self.wall_clock_training_times = {user: 1. for user in users}
+        self.staleness_factors = [0.0 for _ in users]
 
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient

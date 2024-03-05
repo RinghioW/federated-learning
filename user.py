@@ -29,7 +29,13 @@ class User():
         self.shrinkage_ratio = 0.
 
         # Staleness factor
-        staleness_factor = 0.0
+        self.staleness_factor = 0.0
+
+        # Average capability beta
+        self.average_capability = 0.0
+        self.average_power = 0.0
+        self.average_bandwidth = 0.0
+        self.capability_coefficient = 0.0
 
     # Adapt the model to the devices
     def adapt_model(self, model):
@@ -208,3 +214,26 @@ class User():
         
         result = minimize(objective_function, x0=initial_transfer_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
         return result.x, result.fun
+
+    def update_average_capability(self):
+        # Compute current average power
+        average_power = 0.
+        average_bandwidth = 0.
+        dataset_size = 0
+        for device in self.devices:
+            average_power += device.config["compute"]
+            average_bandwidth += (device.config["uplink_rate"] + device.config["downlink_rate"]) / 2
+            dataset_size += device.dataset_size
+        average_power /= len(self.devices)
+        average_bandwidth /= len(self.devices)
+        
+        # Compute the number of transferred samples
+        num_transferred_samples = 0
+        pass
+
+        # Equation 9 in ShuffleFL
+        self.capability_coefficient = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
+        self.average_capability = self.capability_coefficient * (average_power / self.average_power) + (1. - self.capability_coefficient) * (average_bandwidth / self.average_bandwidth)
+        # Update the average capability
+        self.average_power = average_power
+        self.average_bandwidth = average_bandwidth

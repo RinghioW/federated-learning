@@ -9,9 +9,11 @@ class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
         self.dataset = dataset
+        self.dataset_size = len(dataset)
         self.valset = valset
         self.model = None
         self.transition_matrix = None
+        self.num_transferred_samples = 0
 
     def __repr__(self) -> str:
         return f"Device(config={self.config})"
@@ -83,6 +85,7 @@ class Device():
                     break
             print("Warning! Not enough samples")
             return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
+        self.num_transferred_samples += len(samples)
 
     def add_data(self, sample):
         np.append(self.dataset, sample)
