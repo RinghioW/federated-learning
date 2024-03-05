@@ -34,9 +34,6 @@ class Device():
         # Equation 3 from ShuffleFL
         return js_divergence(np.array(reference_distribution), np.array(distribution))
 
-    def initialize_transition_matrix(self, num_devices):
-        self.transition_matrix = np.ones((NUM_CLASSES, num_devices), dtype=int)
-
     # Compute the latency of the device wrt uplink rate, downlink rate, and compute
     # Implements Equation 4, 5 and 6 from ShuffleFL
     def latency(self, device_idx, devices, epochs):

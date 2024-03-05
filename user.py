@@ -52,10 +52,7 @@ class User():
                 device.model = models.quantization.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT, quantize=False)
             else:
                 device.model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-
-    def initialize_transition_matrices(self):
-        for device in self.devices:
-            device.initialize_transition_matrix(num_devices=len(self.devices))
+    
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model

@@ -52,9 +52,6 @@ def main():
     users = [User(devices_grouped[i]) for i in range(num_users)]
     server = Server(users, dataset)
 
-    # Users initialize transition matrices
-    for user in users:
-        user.initialize_transition_matrices()
     time_start = time.time()
     
     # Evaluate the server model before training
