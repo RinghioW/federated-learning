@@ -109,6 +109,8 @@ class User():
                     running_loss += loss.item()
                 print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
 
+    # Train all the devices belonging to the user
+    # Steps 11-15 in the ShuffleFL Algorithm
     def train_devices(self, epochs=5, verbose=True):
         for device in self.devices:
             device.train(epochs, verbose)
@@ -160,7 +162,6 @@ class User():
         # Takes as an input the transfer matrices
         # Returns as an output the result of Equation 7
         def objective_function(x):
-            print("In the obj function")
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), NUM_CLASSES, len(self.devices)))
 

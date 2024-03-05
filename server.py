@@ -19,6 +19,7 @@ class Server():
 
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient
+    # Step 18 in the ShuffleFL algorithm
     def aggregate_updates(self, users):
         sum_weights = users[0].model.state_dict()
         for user in users[1:]:
