@@ -68,7 +68,7 @@ def main():
         # Server sends the model to the users
         for user_idx, user in enumerate(users):
             # The server sends the adaptive coefficient to the users
-            server.send_adaptive_coefficient(user)
+            server.adaptive_coefficient_users()
 
             # User adapts the model for their devices
             print(f"Adapting model for user {user_idx+1}/{len(users)}...")

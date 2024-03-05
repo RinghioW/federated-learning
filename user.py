@@ -6,6 +6,7 @@ import numpy as np
 import time
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
+import math
 
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
@@ -38,7 +39,7 @@ class User():
         self.capability_coefficient = 0.0
 
         # Reduced transition matrices
-        self.reduced_transition_matrices = [np.ones((classes*self.shrinkage_ratio, len(devices) + 1), dtype=int) for _ in devices]
+        self.reduced_transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices) + 1), dtype=int) for _ in devices]
 
     # Adapt the model to the devices
     def adapt_model(self, model):
@@ -245,7 +246,6 @@ class User():
     # Reduce the dimensionality of the transition matrices using the shrinkage ratio
     # In order to reduce the complexity of the shuffling algorithm
     # Implements section 4.4 from ShuffleFL
-
     def reduce_classes(self):
         # Use t-SNE to embed the hidden eatures into a 2-dimensional space
         pass

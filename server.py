@@ -10,11 +10,10 @@ class Server():
             raise ValueError(f"Invalid dataset. Please choose from valid datasets")
         self.users = users
         self.wall_clock_training_times = {user: 1. for user in users}
-        self.staleness_factors = [0.0 for _ in users]
-        self.estimated_performances = [0.0 for _ in users]
+        self.staleness_factors = [1.0 for _ in users]
+        self.estimated_performances = [1.0 for _ in users]
         self.user_capabilities = [1.0 for _ in users]
-        self.adaptive_coefficients = [1.0 for _ in users]
-        self.average_user_latency = 0.0
+        self.average_user_latency = 1.0
         self.scaling_factor = 1.0
 
     # Aggregate the updates from the users
@@ -54,8 +53,8 @@ class Server():
         # Compute average user latency
         average_user_latency = sum(self.estimated_performances) / len(self.estimated_performances)
         for idx, user in enumerate(self.users):
-            self.adaptive_coefficients[idx] = (average_user_latency / self.estimated_performances[idx]) * self.scaling_factor
-        return self.adaptive_coefficients
+            adaptive_coefficient = (average_user_latency / self.estimated_performances[idx]) * self.scaling_factor
+            user.adaptive_coefficient = adaptive_coefficient
     
     def estimated_performance_users(self):
         for idx, user in enumerate(self.users):
