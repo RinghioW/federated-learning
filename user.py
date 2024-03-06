@@ -147,6 +147,9 @@ class User():
                     if i != j:
                         # Send data from class i to device j
                         self.send_data(device, i, j, transition_matrix[i][j])
+                    else:
+                        # TODO: Elements on the diagonal could be the knowledge distillation dataset
+                        pass
 
     # Function to implement the dimensionality reduction of the transition matrices
     # The data is embedded into a 2-dimensional space using t-SNE
@@ -231,7 +234,7 @@ class User():
         average_power /= len(self.devices)
         average_bandwidth /= len(self.devices)
         
-        # Compute the number of transferred samples
+        # TODO: Compute the number of transferred samples
         num_transferred_samples = 0
         pass
 
