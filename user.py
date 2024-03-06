@@ -252,7 +252,10 @@ class User():
 
     # Use k-means to aggregate the classes into k groups
     def kmeans_aggregate_classes(self, embedded_transition_matrices):
-        return KMeans(n_clusters= math.floor(NUM_CLASSES / 3)).fit_transform(embedded_transition_matrices)
+        # Heuristic: Divide the classes into 3 clusters
+        # Alternatively, n_clusters = math.floor(NUM_CLASSES / 3)
+        n_clusters = 3
+        return KMeans(n_clusters).fit_transform(embedded_transition_matrices)
 
     # Reduce the dimensionality of the transition matrices using the shrinkage ratio
     # In order to reduce the complexity of the shuffling algorithm
