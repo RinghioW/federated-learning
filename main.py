@@ -73,7 +73,7 @@ def main():
 
             # Reduce dimensionality of the transmission matrices
             print(f"Reducing feature space for user {user_idx+1}...")
-            user.reduce_feature_space()
+            user.reduce_dimensionality()
             
             # User optimizes the transmission matrices
             print(f"Optimizing transition matrices for user {user_idx+1}...")

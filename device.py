@@ -115,9 +115,10 @@ class Device():
     # Use t-SNE to embed the dataset into 2D space
     def reduce_features(self):
         # Reduce the features of the dataset to 2D
-        self.embedded_dataset = TSNE(n_components=2).fit_transform(self.dataset["img"])
+        feature_space = np.array(self.dataset["img"]).reshape(self.dataset_size, -1)
+        self.embedded_dataset = TSNE(n_components=2).fit_transform(feature_space)
 
     # Cluster datapoints to k classes using KMeans
     def cluster_data(self, shrinkage_ratio):
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
-        self.embedded_dataset =KMeans(n_clusters).fit(self.embedded_dataset)
+        self.embedded_dataset = KMeans(n_clusters).fit_transform(self.embedded_dataset)

@@ -19,12 +19,14 @@ class User():
         # Transition matrix of ShuffleFL (size = number of classes x number of devices + 1)
         # The additional column is for the kd_dataset
         # Also used by equation 7 as the optimization variable for the argmin
-        self.transition_matrices = [np.ones((classes, len(devices) + 1), dtype=int) for _ in devices]
+        # TODO : Add +1 to the len of devices
+        self.transition_matrices = [np.ones((classes, len(devices)), dtype=int) for _ in devices]
         
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
         # Reduced transition matrices (size = number of classes * shrinkage ratio x number of devices + 1)
-        self.reduced_transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices) + 1), dtype=int) for _ in devices]
+        # TODO : Add +1 to the len of devices
+        self.reduced_transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int) for _ in devices]
         
         # System latencies for each device
         self.system_latencies = [0.0 for _ in devices]
@@ -154,10 +156,17 @@ class User():
     # The data is embedded into a 2-dimensional space using t-SNE
     # The classes are then aggregated into k groups using k-means
     # Implements section 4.4 from ShuffleFL
-    def reduce_feature_space(self):
+    def reduce_dimensionality(self):
         # Reduce the dimensionality of the transition matrices using the shrinkage ratio
         # In order to reduce the complexity of the shuffling algorithm
-        self.reduced_transition_matrices = self.reduce_classes()
+        # Use t-SNE to embed the feature space into a 2-dimensional space
+        self.reduce_features()
+        # Use k-means to aggregate the classes into k groups
+        self.reduce_classes()
+
+        # Use the reduced version of the transition matrices
+        for device in self.devices:
+            device.dataset = device.embedded_dataset
         self.transition_matrices = self.reduced_transition_matrices
 
     # Function for optimizing equation 7 from ShuffleFL
@@ -167,7 +176,7 @@ class User():
         # Returns as an output the result of Equation 7
         def objective_function(x):
             # Parse args
-            transfer_matrices = x.reshape((len(self.devices), NUM_CLASSES, len(self.devices)))
+            transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
 
             # Store the current status of the devices
             current_data = []
@@ -210,14 +219,15 @@ class User():
         
 
         n_device = len(self.devices)
-        n_class = NUM_CLASSES
+        n_class = math.floor(NUM_CLASSES*self.shrinkage_ratio)
         n_var = n_device * n_class * n_device
         bounds = [(0, 1)] * n_var
         constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, n_device, n_class)},
                        {'type': 'ineq', 'fun': lambda variables: constraint_matrix_elements(variables)},]
         
         # Run the optimization
-        result = minimize(objective_function, x0=self.transition_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
+        x0 = np.array(self.transition_matrices).flatten()
+        result = minimize(objective_function, x0, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
         return result.x, result.fun
 
     # Compute the average capability of the user compared to last round
@@ -251,10 +261,10 @@ class User():
     def reduce_features(self):
         # Reduce the features into a 2-dimensional space
         for device in self.devices:
-            device.reduce_feature_space()
+            device.reduce_features()
 
     # Use k-means to aggregate the classes into k groups
     # Acts on the data
     def reduce_classes(self):
         for device in self.devices:
-            device.cluster_data()
+            device.cluster_data(self.shrinkage_ratio)
