@@ -4,12 +4,16 @@ import numpy as np
 from utils import js_divergence
 import pandas as pd
 import math
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
 
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
         self.dataset = dataset
         self.dataset_size = len(dataset)
+        self.embedded_dataset = None
+
         self.valset = valset
         self.model = None
         self.transition_matrix = None
@@ -107,3 +111,13 @@ class Device():
         np.append(self.dataset, sample)
         # Update size of dataset
         self.dataset_size = len(self.dataset)
+
+    # Use t-SNE to embed the dataset into 2D space
+    def reduce_features(self):
+        # Reduce the features of the dataset to 2D
+        self.embedded_dataset = TSNE(n_components=2).fit_transform(self.dataset["img"])
+
+    # Cluster datapoints to k classes using KMeans
+    def cluster_data(self, shrinkage_ratio):
+        n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
+        self.embedded_dataset =KMeans(n_clusters).fit(self.embedded_dataset)

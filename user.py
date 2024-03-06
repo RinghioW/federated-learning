@@ -7,8 +7,6 @@ import time
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
 import math
-from sklearn.manifold import TSNE
-from sklearn.cluster import KMeans
 
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
@@ -23,13 +21,15 @@ class User():
         # Also used by equation 7 as the optimization variable for the argmin
         self.transition_matrices = [np.ones((classes, len(devices) + 1), dtype=int) for _ in devices]
         
+        # Shrinkage ratio for reducing the classes in the transition matrix
+        self.shrinkage_ratio = 0.3
+        # Reduced transition matrices (size = number of classes * shrinkage ratio x number of devices + 1)
+        self.reduced_transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices) + 1), dtype=int) for _ in devices]
+        
         # System latencies for each device
         self.system_latencies = [0.0 for _ in devices]
         self.adaptive_coefficient = 1.0
         self.data_imbalances = [0.0 for _ in devices]
-
-        # Shrinkage ration for reducing the classes in the transition matrix
-        self.shrinkage_ratio = 1.
 
         # Staleness factor
         self.staleness_factor = 0.0
@@ -40,8 +40,6 @@ class User():
         self.average_bandwidth = 0.0
         self.capability_coefficient = 0.0
 
-        # Reduced transition matrices
-        self.reduced_transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices) + 1), dtype=int) for _ in devices]
 
     # Adapt the model to the devices
     def adapt_model(self, model):
@@ -152,6 +150,16 @@ class User():
                         # Send data from class i to device j
                         self.send_data(device, i, j, transition_matrix[i][j])
 
+    # Function to implement the dimensionality reduction of the transition matrices
+    # The data is embedded into a 2-dimensional space using t-SNE
+    # The classes are then aggregated into k groups using k-means
+    # Implements section 4.4 from ShuffleFL
+    def reduce_feature_space(self):
+        # Reduce the dimensionality of the transition matrices using the shrinkage ratio
+        # In order to reduce the complexity of the shuffling algorithm
+        self.reduced_transition_matrices = self.reduce_classes()
+        self.transition_matrices = self.reduced_transition_matrices
+
     # Function for optimizing equation 7 from ShuffleFL
     def optimize_transmission_matrices(self):
         # Define the objective function to optimize
@@ -184,6 +192,7 @@ class User():
             return STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_coefficient*np.max(data_imbalances)
 
         # Define the constraints for the optimization
+        # TODO: Wtf is this constraint
         def constraint_row_sum(flat_variables, device_num, class_num):
             # Reshape the flat variables back to their original shapes
             variables = flat_variables.reshape((device_num, class_num, device_num))
@@ -195,21 +204,20 @@ class User():
                 row_sums.extend(row_sum - 1.)
             return row_sums
         
+        # TODO: Wtf is this constraint
         def constraint_matrix_elements(variables):
             return variables
         
-        initial_transfer_matrices = [np.ones((NUM_CLASSES, len(self.devices)), dtype=int) for _ in self.devices]
-        initial_transfer_matrices = np.array(initial_transfer_matrices, dtype=int).flatten()
 
         n_device = len(self.devices)
         n_class = NUM_CLASSES
-
         n_var = n_device * n_class * n_device
         bounds = [(0, 1)] * n_var
         constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, n_device, n_class)},
                        {'type': 'ineq', 'fun': lambda variables: constraint_matrix_elements(variables)},]
         
-        result = minimize(objective_function, x0=initial_transfer_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
+        # Run the optimization
+        result = minimize(objective_function, x0=self.transition_matrices, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
         return result.x, result.fun
 
     # Compute the average capability of the user compared to last round
@@ -240,33 +248,13 @@ class User():
         self.average_bandwidth = average_bandwidth
 
     # Use t-SNE to embed the feature space into a 2-dimensional space
-    def t_sne(self):
-        transition_matrices = self.transition_matrices
-        # Flatten the transition matrices to be (n_samples, n_features)
-        transition_matrices = np.array(transition_matrices)
-        first_dim = transition_matrices.shape[0]
-        transition_matrices = transition_matrices.reshape((first_dim, -1))
-        
-        # Fit the transition matrices into a 2-dimensional space
-        return TSNE().fit_transform(transition_matrices)
+    def reduce_features(self):
+        # Reduce the features into a 2-dimensional space
+        for device in self.devices:
+            device.reduce_feature_space()
 
     # Use k-means to aggregate the classes into k groups
-    def kmeans_aggregate_classes(self, embedded_transition_matrices):
-        # Heuristic: Divide the classes into 3 clusters
-        # Alternatively, n_clusters = math.floor(NUM_CLASSES / 3)
-        n_clusters = 3
-        return KMeans(n_clusters).fit_transform(embedded_transition_matrices)
-
-    # Reduce the dimensionality of the transition matrices using the shrinkage ratio
-    # In order to reduce the complexity of the shuffling algorithm
-    # Implements section 4.4 from ShuffleFL
+    # Acts on the data
     def reduce_classes(self):
-        # Use t-SNE to embed the hidden eatures into a 2-dimensional space
-        embedded_transition_matrices = self.t_sne()
-
-        # Use k-means to cluster the data into k groups
-        clustered_features = self.kmeans_aggregate_classes(embedded_transition_matrices)
-
-        return clustered_features
-
-    
+        for device in self.devices:
+            device.cluster_data()

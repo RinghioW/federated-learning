@@ -70,6 +70,10 @@ def main():
             # User adapts the model for their devices
             print(f"Adapting model for user {user_idx+1}/{len(users)}...")
             user.adapt_model(server.model)
+
+            # Reduce dimensionality of the transmission matrices
+            print(f"Reducing feature space for user {user_idx+1}...")
+            user.reduce_feature_space()
             
             # User optimizes the transmission matrices
             print(f"Optimizing transition matrices for user {user_idx+1}...")
