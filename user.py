@@ -16,17 +16,13 @@ class User():
 
         # SHUFFLE-FL
 
-        # Transition matrix of ShuffleFL (size = number of classes x number of devices + 1)
+        # Transition matrix of ShuffleFL of size (floor{number of classes * shrinkage ratio}, number of devices + 1)
         # The additional column is for the kd_dataset
         # Also used by equation 7 as the optimization variable for the argmin
         # TODO : Add +1 to the len of devices
-        self.transition_matrices = [np.ones((classes, len(devices)), dtype=int) for _ in devices]
-        
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        # Reduced transition matrices (size = number of classes * shrinkage ratio x number of devices + 1)
-        # TODO : Add +1 to the len of devices
-        self.reduced_transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int) for _ in devices]
+        self.transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int) for _ in devices] # TODO: +1
         
         # System latencies for each device
         self.system_latencies = [0.0 for _ in devices]
@@ -167,7 +163,6 @@ class User():
         # Use the reduced version of the transition matrices
         for device in self.devices:
             device.dataset = device.embedded_dataset
-        self.transition_matrices = self.reduced_transition_matrices
 
     # Function for optimizing equation 7 from ShuffleFL
     def optimize_transmission_matrices(self):

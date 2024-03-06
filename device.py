@@ -21,7 +21,11 @@ class Device():
 
     def __repr__(self) -> str:
         return f"Device(config={self.config})"
-    
+
+    # Initialize transition matrix to be all ones
+    def initialize_transition_matrix(self, num_devices):
+        self.transition_matrix = np.ones((NUM_CLASSES, num_devices), dtype=int)
+
     # Compute the JS divergence between the reference balanced distribution and the actual data distribution
     # Implements Equation 3 from ShuffleFL
     def data_imbalance(self):
@@ -92,13 +96,13 @@ class Device():
         amount = math.floor(amount) # Ensure that the amount is an integer
         for i in range(amount):
             for idx, sample in enumerate(self.dataset):
-                if sample[-1] == data_class:
+                if sample == data_class:
                     samples.append(sample)
                     np.delete(self.dataset, idx)
                     break
             print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of class {data_class} from the dataset.")
             for idx, sample in enumerate(self.dataset):
-                print(f"Dataset dump {idx + 1} / {len(self.dataset)}: {sample[-1]}")
+                print(f"Dataset dump {idx + 1} / {len(self.dataset)}: {sample}")
             return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
         self.num_transferred_samples += len(samples)
 
@@ -121,4 +125,6 @@ class Device():
     # Cluster datapoints to k classes using KMeans
     def cluster_data(self, shrinkage_ratio):
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
-        self.embedded_dataset = KMeans(n_clusters).fit_transform(self.embedded_dataset)
+
+        # TODO: this transformation transforms the dataset into a (n_samples,) shape
+        self.embedded_dataset = KMeans(n_clusters).fit_predict(self.embedded_dataset)
