@@ -128,9 +128,14 @@ class User():
             self.data_imbalances[i] = device.data_imbalance()
         return self.data_imbalances
     
-    def send_data(self, sender, sample_class, receiver_idx, amount):
-        sample = sender.remove_data(sample_class, amount)
+    def send_data(self, sender_idx, receiver_idx, cluster, amount):
+        # Identify sender and receiver
+        sender = self.devices[sender_idx]
         receiver = self.devices[receiver_idx]
+
+        # Sender removes a sample
+        sample = sender.remove_data(cluster, amount)
+        # Receiver adds that sample
         receiver.add_data(sample)
         return sample
 
@@ -141,12 +146,12 @@ class User():
         pass
 
         # Each device sends data according to the respective transition matrix
-        for transition_matrix, device in zip(transition_matrices, self.devices):
-            for i in range(len(transition_matrix)):
-                for j in range(len(transition_matrix[0])):
-                    if i != j:
-                        # Send data from class i to device j
-                        self.send_data(device, i, j, transition_matrix[i][j])
+        for device_idx, transition_matrix in enumerate(transition_matrices):
+            for cluster in range(len(transition_matrix)):
+                for other_device_idx in range(len(transition_matrix[0])):
+                    if device_idx != other_device_idx:
+                        # Send data from cluster i to device j
+                        self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster, amount=transition_matrix[cluster][other_device_idx])
                     else:
                         # TODO: Elements on the diagonal could be the knowledge distillation dataset
                         pass
