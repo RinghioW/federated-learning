@@ -92,13 +92,13 @@ class Device():
         amount = math.floor(amount) # Ensure that the amount is an integer
         for i in range(amount):
             for idx, sample in enumerate(self.dataset):
-                if sample["label"] == data_class:
+                if sample[-1] == data_class:
                     samples.append(sample)
                     np.delete(self.dataset, idx)
                     break
             print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of class {data_class} from the dataset.")
             for idx, sample in enumerate(self.dataset):
-                print(f"Dataset dump {idx + 1} / {len(self.dataset)}: {sample['label']}")
+                print(f"Dataset dump {idx + 1} / {len(self.dataset)}: {sample[-1]}")
             return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
         self.num_transferred_samples += len(samples)
 
