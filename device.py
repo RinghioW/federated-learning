@@ -85,13 +85,16 @@ class Device():
     # Used in the transfer function to send data to a different device
     def remove_data(self, data_class, amount):
         samples = []
-        for _ in range(math.floor(amount)):
+        amount = math.floor(amount) # Ensure that the amount is an integer
+        for i in range(amount):
             for idx, sample in enumerate(self.dataset):
                 if sample["label"] == data_class:
                     samples.append(sample)
                     np.delete(self.dataset, idx)
                     break
-            print("Warning! Not enough samples")
+            print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of class {data_class} from the dataset.")
+            for idx, sample in enumerate(self.dataset):
+                print(f"Dataset dump {idx + 1} / {len(self.dataset)}: {sample['label']}")
             return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
         self.num_transferred_samples += len(samples)
 

@@ -7,6 +7,8 @@ import time
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
 import math
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
 
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
@@ -237,12 +239,31 @@ class User():
         self.average_power = average_power
         self.average_bandwidth = average_bandwidth
 
+    # Use t-SNE to embed the feature space into a 2-dimensional space
+    def t_sne(self):
+        transition_matrices = self.transition_matrices
+        # Flatten the transition matrices to be (n_samples, n_features)
+        transition_matrices = np.array(transition_matrices)
+        first_dim = transition_matrices.shape[0]
+        transition_matrices = transition_matrices.reshape((first_dim, -1))
+        
+        # Fit the transition matrices into a 2-dimensional space
+        return TSNE().fit_transform(transition_matrices)
+
+    # Use k-means to aggregate the classes into k groups
+    def kmeans_aggregate_classes(self, embedded_transition_matrices):
+        return KMeans(n_clusters= math.floor(NUM_CLASSES / 3)).fit_transform(embedded_transition_matrices)
+
     # Reduce the dimensionality of the transition matrices using the shrinkage ratio
     # In order to reduce the complexity of the shuffling algorithm
     # Implements section 4.4 from ShuffleFL
     def reduce_classes(self):
         # Use t-SNE to embed the hidden eatures into a 2-dimensional space
-        pass
+        embedded_transition_matrices = self.t_sne()
 
         # Use k-means to cluster the data into k groups
-        pass
+        clustered_features = self.kmeans_aggregate_classes(embedded_transition_matrices)
+
+        return clustered_features
+
+    
