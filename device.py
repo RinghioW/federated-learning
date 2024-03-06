@@ -11,13 +11,12 @@ class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
         self.dataset = dataset
-        self.dataset_size = len(dataset)
-        self.embedded_dataset = None
 
         self.valset = valset
         self.model = None
-        self.transition_matrix = None
-        self.num_transferred_samples = 0
+        self.transition_matrix = None # Size is not known a priori, depends on the number of devices
+
+        self.datset_clusters = [None for _ in range(len(self.dataset))] # For each sample, the cluster that the sample belongs to
 
     def __repr__(self) -> str:
         return f"Device(config={self.config})"
@@ -57,7 +56,7 @@ class Device():
                     t_communication += other_device.transition_matrix[data_class_idx][device_idx] * ((1/self.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
 
         # Equation 6 from ShuffleFL
-        t_computation = 3 * epochs * self.dataset_size * self.config["compute"]
+        t_computation = 3 * epochs * len(self.dataset) * self.config["compute"]
 
         # Equation 4 from ShuffleFL
         return t_communication + t_computation
@@ -91,40 +90,44 @@ class Device():
                 print(f"Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
 
     # Used in the transfer function to send data to a different device
-    def remove_data(self, data_class, amount):
+    # Remove data that matches the cluster and return it
+    def remove_data(self, cluster, amount):
         samples = []
         amount = math.floor(amount) # Ensure that the amount is an integer
+        removed = False
         for i in range(amount):
-            for idx, sample in enumerate(self.dataset):
-                if sample == data_class:
+            for idx, c in enumerate(self.datset_clusters):
+                if c == cluster:
+                    sample = self.dataset[idx]
                     samples.append(sample)
                     np.delete(self.dataset, idx)
+                    removed = True
                     break
-            print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of class {data_class} from the dataset.")
-            for idx, sample in enumerate(self.dataset):
-                print(f"Dataset dump {idx + 1} / {len(self.dataset)}: {sample}")
-            return Exception(f"Could not remove {amount} samples of class {data_class} from the dataset")
-        self.num_transferred_samples += len(samples)
+            if not removed:
+                print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of cluster {cluster} from the dataset.")
+                for idx, sample in enumerate(self.dataset):
+                    print(f"Dataset sample {idx + 1} / {len(self.dataset)}: class {sample["label"]}, cluster {self.datset_clusters[idx]}")
+                # return Exception(f"Could not remove {amount} samples of cluster {cluster} from the dataset")
+            removed = False
 
-        # Update size of dataset
-        self.dataset_size = len(self.dataset)
         return samples
 
     # Used in the transfer function to receive data from a different device
     def add_data(self, sample):
         np.append(self.dataset, sample)
-        # Update size of dataset
-        self.dataset_size = len(self.dataset)
+        return sample
 
-    # Use t-SNE to embed the dataset into 2D space
-    def reduce_features(self):
-        # Reduce the features of the dataset to 2D
-        feature_space = np.array(self.dataset["img"]).reshape(self.dataset_size, -1)
-        self.embedded_dataset = TSNE(n_components=2).fit_transform(feature_space)
-
-    # Cluster datapoints to k classes using KMeans
+    # Assing each datapoint to a cluster
     def cluster_data(self, shrinkage_ratio):
-        n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
+        # Use t-SNE to embed the dataset into 2D space
+        # TODO : figure out whether it is 
+        # (1) feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
+        # or
+        # (2) feature_space = np.array(self.dataset).reshape(len(self.dataset), -1)
+        feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
+        feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
 
-        # TODO: this transformation transforms the dataset into a (n_samples,) shape
-        self.embedded_dataset = KMeans(n_clusters).fit_predict(self.embedded_dataset)
+        # Cluster datapoints to k classes using KMeans
+        n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
+        self.datset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
+        return self.datset_clusters

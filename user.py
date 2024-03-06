@@ -153,16 +153,8 @@ class User():
     # The classes are then aggregated into k groups using k-means
     # Implements section 4.4 from ShuffleFL
     def reduce_dimensionality(self):
-        # Reduce the dimensionality of the transition matrices using the shrinkage ratio
-        # In order to reduce the complexity of the shuffling algorithm
-        # Use t-SNE to embed the feature space into a 2-dimensional space
-        self.reduce_features()
-        # Use k-means to aggregate the classes into k groups
-        self.reduce_classes()
-
-        # Use the reduced version of the transition matrices
         for device in self.devices:
-            device.dataset = device.embedded_dataset
+            device.cluster_data(self.shrinkage_ratio)
 
     # Function for optimizing equation 7 from ShuffleFL
     def optimize_transmission_matrices(self):
@@ -252,14 +244,3 @@ class User():
         self.average_power = average_power
         self.average_bandwidth = average_bandwidth
 
-    # Use t-SNE to embed the feature space into a 2-dimensional space
-    def reduce_features(self):
-        # Reduce the features into a 2-dimensional space
-        for device in self.devices:
-            device.reduce_features()
-
-    # Use k-means to aggregate the classes into k groups
-    # Acts on the data
-    def reduce_classes(self):
-        for device in self.devices:
-            device.cluster_data(self.shrinkage_ratio)

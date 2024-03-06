@@ -86,7 +86,7 @@ def main():
 
             # User shuffles the data and creates a knowledge distillation dataset
             print(f"Shuffling data for user {user_idx+1}...")
-            user.shuffle_data()
+            user.shuffle_data(user.transition_matrices)
 
             # User measures the system latencies
             user.latency_devices(epochs=device_epochs)
