@@ -134,11 +134,11 @@ class User():
         sender = self.devices[sender_idx]
         receiver = self.devices[receiver_idx]
 
-        # Sender removes a sample
-        sample = sender.remove_data(cluster, amount)
-        # Receiver adds that sample
-        receiver.add_data(sample)
-        return sample
+        # Sender removes some samples
+        samples = sender.remove_data(cluster, amount)
+        # Receiver adds those samples
+        receiver.add_data(samples)
+        return samples
 
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL

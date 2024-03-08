@@ -117,9 +117,10 @@ class Device():
         return samples
 
     # Used in the transfer function to receive data from a different device
-    def add_data(self, sample):
-        np.append(self.dataset, sample)
-        return sample
+    def add_data(self, samples):
+        for sample in samples:
+            np.append(self.dataset, sample)
+        return samples
     
     # Append to the knowledge distillation dataset
     def add_kd_data(self, cluster, amount):
@@ -141,8 +142,8 @@ class Device():
                     print(f"Dataset sample {idx + 1} / {len(self.dataset)}: class {sample["label"]}, cluster {self.datset_clusters[idx]}")
                 # return Exception(f"Could not remove {amount} samples of cluster {cluster} from the dataset")
             removed = False
-
-        self.kd_dataset.append(samples)
+        for sample in samples:
+            self.kd_dataset.append(sample)
         return samples
 
     # Assing each datapoint to a cluster
