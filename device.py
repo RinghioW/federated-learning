@@ -16,7 +16,11 @@ class Device():
         self.model = None
         self.transition_matrix = None # Size is not known a priori, depends on the number of devices
 
-        self.datset_clusters = [None for _ in range(len(self.dataset))] # For each sample, the cluster that the sample belongs to
+        self.datset_clusters = [None] * len(self.dataset) # For each sample, the cluster that the sample belongs to
+
+        # The knowledge distillation dataset is created by sending a fraction of the dataset to itself when optimizing the transmission matrix
+        self.kd_dataset = [] # The dataset that is used for knowledge distillation
+
 
     def __repr__(self) -> str:
         return f"Device(config={self.config})"
@@ -30,11 +34,11 @@ class Device():
     def data_imbalance(self):
         # Calculate the reference data distribution
         # The reference data distribution is a balanced distribution, all classes have the same number of samples
-        reference_distribution = [len(self.dataset)/NUM_CLASSES for _ in range(NUM_CLASSES)]
+        reference_distribution = [len(self.dataset)/NUM_CLASSES] * NUM_CLASSES
 
         # Compute the JS divergence between the reference distribution and the actual data distribution
         dataloader = torch.utils.data.DataLoader(self.dataset)
-        distribution = [0 for _ in range(NUM_CLASSES)]
+        distribution = [0] * NUM_CLASSES
         for element in dataloader:
             distribution[element["label"]] += 1
 
@@ -116,6 +120,30 @@ class Device():
     def add_data(self, sample):
         np.append(self.dataset, sample)
         return sample
+    
+    # Append to the knowledge distillation dataset
+    def add_kd_data(self, cluster, amount):
+        samples = []
+        amount = math.floor(amount) # Ensure that the amount is an integer
+        removed = False
+
+        for i in range(amount):
+            for idx, c in enumerate(self.datset_clusters):
+                if c == cluster:
+                    sample = self.dataset[idx]
+                    samples.append(sample)
+                    np.delete(self.dataset, idx)
+                    removed = True
+                    break
+            if not removed:
+                print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of cluster {cluster} from the dataset.")
+                for idx, sample in enumerate(self.dataset):
+                    print(f"Dataset sample {idx + 1} / {len(self.dataset)}: class {sample["label"]}, cluster {self.datset_clusters[idx]}")
+                # return Exception(f"Could not remove {amount} samples of cluster {cluster} from the dataset")
+            removed = False
+
+        self.kd_dataset.append(samples)
+        return samples
 
     # Assing each datapoint to a cluster
     def cluster_data(self, shrinkage_ratio):

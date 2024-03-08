@@ -44,7 +44,7 @@ def main():
                 "energy_budget" : np.random.randint(1,15),
                 "uplink_rate" : np.random.randint(1,15),
                 "downlink_rate" : np.random.randint(1,15)
-                } for _ in range(num_devices)]
+                }] * num_devices
 
     # Create devices and users
     devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]

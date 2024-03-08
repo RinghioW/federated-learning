@@ -19,15 +19,14 @@ class User():
         # Transition matrix of ShuffleFL of size (floor{number of classes * shrinkage ratio}, number of devices + 1)
         # The additional column is for the kd_dataset
         # Also used by equation 7 as the optimization variable for the argmin
-        # TODO : Add +1 to the len of devices
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        self.transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int) for _ in devices] # TODO: +1
+        self.transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int)] * len(devices)
         
         # System latencies for each device
-        self.system_latencies = [0.0 for _ in devices]
+        self.system_latencies = [0.0] * len(devices)
         self.adaptive_coefficient = 1.0
-        self.data_imbalances = [0.0 for _ in devices]
+        self.data_imbalances = [0.0] * len(devices)
 
         # Staleness factor
         self.staleness_factor = 0.0
@@ -40,6 +39,8 @@ class User():
 
 
     # Adapt the model to the devices
+    # Uses quantization
+    # TODO : use more adaptation techniques
     def adapt_model(self, model):
         self.model = model
         for device in self.devices:
@@ -142,8 +143,6 @@ class User():
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
     def shuffle_data(self, transition_matrices):
-        # TODO: Implement the knowledge distillation dataset
-        pass
 
         # Each device sends data according to the respective transition matrix
         for device_idx, transition_matrix in enumerate(transition_matrices):
@@ -153,8 +152,8 @@ class User():
                         # Send data from cluster i to device j
                         self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster, amount=transition_matrix[cluster][other_device_idx])
                     else:
-                        # TODO: Elements on the diagonal could be the knowledge distillation dataset
-                        pass
+                        # Elements on the diagonal form the knowledge distillation dataset for the given user
+                        self.devices[device_idx].add_kd_data(cluster, transition_matrix[cluster][device_idx])
 
     # Function to implement the dimensionality reduction of the transition matrices
     # The data is embedded into a 2-dimensional space using t-SNE
@@ -196,28 +195,34 @@ class User():
             return STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_coefficient*np.max(data_imbalances)
 
         # Define the constraints for the optimization
-        # TODO: Wtf is this constraint
-        def constraint_row_sum(flat_variables, device_num, class_num):
-            # Reshape the flat variables back to their original shapes
-            variables = flat_variables.reshape((device_num, class_num, device_num))
+        # TODO: What is this constraint
+        # Row sum represents the amount of data of each class that is sent
+        def constraint_row_sum(variables, num_devices, num_clusters):
+            # Reshape the flat variables back to the transition matrices shape
+            transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
 
             # Calculate the row sums for each matrix and ensure they sum to 1
+            # TODO: why?
             row_sums = []
-            for x in variables:
-                row_sum = np.sum(x, axis=1)
+            for element in transition_matrices:
+                # TODO: What is the shape of element?
+                # Is it not just a scalar value?
+                row_sum = np.sum(element, axis=1)
+                # TODO: Why subtract 1? And why is it a float?
                 row_sums.extend(row_sum - 1.)
             return row_sums
         
-        # TODO: Wtf is this constraint
+        # TODO: What is this constraint
+        # Just a constraint to change matrix elements?
         def constraint_matrix_elements(variables):
             return variables
         
 
-        n_device = len(self.devices)
-        n_class = math.floor(NUM_CLASSES*self.shrinkage_ratio)
-        n_var = n_device * n_class * n_device
-        bounds = [(0, 1)] * n_var
-        constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, n_device, n_class)},
+        num_devices = len(self.devices)
+        num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
+        num_variables = num_devices * (num_clusters * num_devices)
+        bounds = [(0, 1)] * num_variables # TODO : Why is the upper bound 1? Can only 1 sample be sent?
+        constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, num_devices, num_clusters)},
                        {'type': 'ineq', 'fun': lambda variables: constraint_matrix_elements(variables)},]
         
         # Run the optimization
@@ -251,4 +256,10 @@ class User():
         # Update the average capability
         self.average_power = average_power
         self.average_bandwidth = average_bandwidth
+
+    def create_kd_dataset(self):
+        # Create the knowledge distillation dataset
+        # The dataset is created by sampling from the devices
+        # The dataset is then used to train the user model
+        self.kd_dataset = []
 
