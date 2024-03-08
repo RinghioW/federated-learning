@@ -57,7 +57,7 @@ class User():
         student = self.model
         for i, device in enumerate(self.devices):
             teacher = device.model
-            train_loader = torch.utils.data.DataLoader(self.kd_dataset[i], shuffle=True, batch_size=32)
+            train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32)
             ce_loss = nn.CrossEntropyLoss()
             optimizer = optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -262,4 +262,6 @@ class User():
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
         self.kd_dataset = []
+        for device in self.devices:
+            self.kd_dataset.append(device.kd_dataset)
 
