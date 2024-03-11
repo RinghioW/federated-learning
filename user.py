@@ -129,9 +129,11 @@ class User():
             self.data_imbalances[i] = device.data_imbalance()
         return self.data_imbalances
     
-    def send_data(self, sender_idx, receiver_idx, cluster, amount):
+    def send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
         # Identify sender and receiver
         sender = self.devices[sender_idx]
+        amount = percentage_amount * len(sender.dataset)
+
         receiver = self.devices[receiver_idx]
 
         # Sender removes some samples
@@ -143,14 +145,13 @@ class User():
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
     def shuffle_data(self, transition_matrices):
-
         # Each device sends data according to the respective transition matrix
         for device_idx, transition_matrix in enumerate(transition_matrices):
             for cluster in range(len(transition_matrix)):
                 for other_device_idx in range(len(transition_matrix[0])):
                     if device_idx != other_device_idx:
                         # Send data from cluster i to device j
-                        self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster, amount=transition_matrix[cluster][other_device_idx])
+                        self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster, percentage_amount=transition_matrix[cluster][other_device_idx])
                     else:
                         # Elements on the diagonal form the knowledge distillation dataset for the given user
                         self.devices[device_idx].add_kd_data(cluster, transition_matrix[cluster][device_idx])
