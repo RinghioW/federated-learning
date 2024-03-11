@@ -20,7 +20,7 @@ class Device():
 
         # The knowledge distillation dataset is created by sending a fraction of the dataset to itself when optimizing the transmission matrix
         self.kd_dataset = [] # The dataset that is used for knowledge distillation
-
+        self.num_transferred_samples = 0
 
     def __repr__(self) -> str:
         return f"Device(config={self.config})"
@@ -114,6 +114,9 @@ class Device():
                 # return Exception(f"Could not remove {amount} samples of cluster {cluster} from the dataset")
             removed = False
 
+        # Update the number of samples that have been sent
+        self.num_transferred_samples += amount
+
         return samples
 
     # Used in the transfer function to receive data from a different device
@@ -123,11 +126,10 @@ class Device():
         return samples
     
     # Append to the knowledge distillation dataset
-    def add_kd_data(self, cluster, amount):
+    def add_kd_data(self, cluster, percentage_amount):
         samples = []
-        amount = math.floor(amount) # Ensure that the amount is an integer
+        amount = math.floor(percentage_amount) # Ensure that the amount is an integer
         removed = False
-
         for i in range(amount):
             for idx, c in enumerate(self.datset_clusters):
                 if c == cluster:
@@ -149,11 +151,7 @@ class Device():
     # Assing each datapoint to a cluster
     def cluster_data(self, shrinkage_ratio):
         # Use t-SNE to embed the dataset into 2D space
-        # TODO : figure out whether it is 
-        # (1) feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
-        # or
-        # (2) feature_space = np.array(self.dataset).reshape(len(self.dataset), -1)
-        # Update : aggregate only the features, not the labels
+        # Aggregate only the features, not the labels
         feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
         feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
 

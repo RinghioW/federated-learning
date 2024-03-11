@@ -153,7 +153,7 @@ class User():
                         self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster, percentage_amount=transition_matrix[cluster][other_device_idx])
                     else:
                         # Elements on the diagonal form the knowledge distillation dataset for the given user
-                        self.devices[device_idx].add_kd_data(cluster, transition_matrix[cluster][device_idx])
+                        self.devices[device_idx].add_kd_data(cluster=cluster, percentage_amount=transition_matrix[cluster][device_idx])
 
     # Function to implement the dimensionality reduction of the transition matrices
     # The data is embedded into a 2-dimensional space using t-SNE
@@ -177,6 +177,10 @@ class User():
             for device in self.devices:
                 current_data.append(device.dataset)
 
+            # Reset the number of transferred samples for each device
+            for device in self.devices:
+                device.num_transferred_samples = 0
+            
             # Transfer the data according to the matrices
             self.shuffle_data(transfer_matrices)
 
@@ -241,8 +245,8 @@ class User():
         average_power /= len(self.devices)
         average_bandwidth /= len(self.devices)
         
-        # TODO: Compute the number of transferred samples
-        num_transferred_samples = 0
+        # Compute the number of transferred samples
+        num_transferred_samples = sum([device.num_transferred_samples for device in self.devices])
         pass
 
         # Equation 9 in ShuffleFL
