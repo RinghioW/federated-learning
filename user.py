@@ -132,12 +132,11 @@ class User():
     def send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
         # Identify sender and receiver
         sender = self.devices[sender_idx]
-        amount = percentage_amount * len(sender.dataset)
 
         receiver = self.devices[receiver_idx]
 
         # Sender removes some samples
-        samples = sender.remove_data(cluster, amount)
+        samples = sender.remove_data(cluster, percentage_amount)
         # Receiver adds those samples
         receiver.add_data(samples)
         return samples

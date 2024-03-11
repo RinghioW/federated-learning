@@ -95,9 +95,9 @@ class Device():
 
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it
-    def remove_data(self, cluster, amount):
+    def remove_data(self, cluster, percentage_amount):
         samples = []
-        amount = math.floor(amount) # Ensure that the amount is an integer
+        amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
         removed = False
         for i in range(amount):
             for idx, c in enumerate(self.datset_clusters):
