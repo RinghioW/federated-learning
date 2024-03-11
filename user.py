@@ -207,9 +207,9 @@ class User():
             # Calculate the row sums for each matrix and ensure they sum to 1
             # Because each row is the distribution of the data of a class for a device
             row_sums = []
-            for element in transition_matrices:
+            for matrix in transition_matrices:
                 # Compute Sum(row)
-                row_sum = np.sum(element, axis=1)
+                row_sum = np.sum(matrix, axis=1)
                 # Now compute [1 - Sum(row)]
                 row_sums.extend(1. - row_sum)
             return row_sums
@@ -218,9 +218,8 @@ class User():
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
         num_variables = num_devices * (num_clusters * num_devices)
         # Each element in the matrix is a probability, so it must be between 0 and 1
-        bounds = [Bounds(lb=0.,ub=1., keep_feasible=True)] * num_variables
+        bounds = [(0.,1.)] * num_variables
         # If the sum is less than one, we can use diagonal as additional dataset
-        # TODO: Note that if we use the bounds to be [0, 1] then we can remove the constraint non_negative
         constraints = [{'type': 'ineq', 'fun': lambda variables: row_less_than_one(variables, num_devices, num_clusters)},]
         
         # Run the optimization
