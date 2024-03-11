@@ -76,6 +76,7 @@ def main():
             print(f"Adapting model for user {user_idx+1}/{len(users)}...")
             user.adapt_model(server.model)
 
+
             # Reduce dimensionality of the transmission matrices
             print(f"Reducing feature space for user {user_idx+1}...")
             user.reduce_dimensionality()
@@ -88,6 +89,9 @@ def main():
             print(f"Shuffling data for user {user_idx+1}...")
             user.shuffle_data(user.transition_matrices)
             user.create_kd_dataset()
+            
+            # User updates parameters based on last iteration
+            user.update_average_capability()
             
             # User measures the system latencies
             user.latency_devices(epochs=device_epochs)

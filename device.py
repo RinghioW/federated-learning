@@ -25,9 +25,9 @@ class Device():
     def __repr__(self) -> str:
         return f"Device(config={self.config})"
 
-    # Initialize transition matrix to be all ones
+    # Initialize transition matrix to be all zeros
     def initialize_transition_matrix(self, num_devices):
-        self.transition_matrix = np.ones((NUM_CLASSES, num_devices), dtype=int)
+        self.transition_matrix = np.zeros((NUM_CLASSES, num_devices), dtype=int)
 
     # Compute the JS divergence between the reference balanced distribution and the actual data distribution
     # Implements Equation 3 from ShuffleFL

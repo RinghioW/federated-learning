@@ -21,7 +21,7 @@ class User():
         # Also used by equation 7 as the optimization variable for the argmin
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        self.transition_matrices = [np.ones((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int)] * len(devices)
+        self.transition_matrices = [np.zeros((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int)] * len(devices)
         
         # System latencies for each device
         self.system_latencies = [0.0] * len(devices)
@@ -228,7 +228,7 @@ class User():
         
         # Run the optimization
         x0 = np.array(self.transition_matrices).flatten()
-        result = minimize(objective_function, x0, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 1000, 'ftol': 1e-06, 'disp': True})
+        result = minimize(objective_function, x0, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 100, 'ftol': 1e-02, 'disp': True})
         return result.x, result.fun
 
     # Compute the average capability of the user compared to last round
@@ -241,7 +241,7 @@ class User():
         for device in self.devices:
             average_power += device.config["compute"]
             average_bandwidth += (device.config["uplink_rate"] + device.config["downlink_rate"]) / 2
-            dataset_size += device.dataset_size
+            dataset_size += len(device.dataset)
         average_power /= len(self.devices)
         average_bandwidth /= len(self.devices)
         
