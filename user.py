@@ -195,35 +195,37 @@ class User():
             return STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_coefficient*np.max(data_imbalances)
 
         # Define the constraints for the optimization
-        # TODO: What is this constraint
-        # Row sum represents the amount of data of each class that is sent
-        def constraint_row_sum(variables, num_devices, num_clusters):
+        # Row sum represents the probability of data of each class that is sent
+        # Sum(row) <= 1
+        # Equivalent to [1 - Sum(row)] >= 0
+        # Note that in original ShuffleFL the constraint is Sum(row) = 1
+        # But in this case, we can use the diagonal as additional dataset
+        def row_sums_to_one(variables, num_devices, num_clusters):
             # Reshape the flat variables back to the transition matrices shape
             transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
 
             # Calculate the row sums for each matrix and ensure they sum to 1
-            # TODO: why?
+            # Because each row is the distribution of the data of a class for a device
             row_sums = []
             for element in transition_matrices:
-                # TODO: What is the shape of element?
-                # Is it not just a scalar value?
+                # Compute Sum(row)
                 row_sum = np.sum(element, axis=1)
-                # TODO: Why subtract 1? And why is it a float?
-                row_sums.extend(row_sum - 1.)
+                # Now compute [1 - Sum(row)]
+                row_sums.extend(1. - row_sum)
             return row_sums
         
-        # TODO: What is this constraint
-        # Just a constraint to change matrix elements?
-        def constraint_matrix_elements(variables):
+        # Non negative constraint: x >= 0
+        def non_negative(variables):
             return variables
         
-
         num_devices = len(self.devices)
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
         num_variables = num_devices * (num_clusters * num_devices)
-        bounds = [(0, 1)] * num_variables # TODO : Why is the upper bound 1? Can only 1 sample be sent?
-        constraints = [{'type': 'eq', 'fun': lambda variables: constraint_row_sum(variables, num_devices, num_clusters)},
-                       {'type': 'ineq', 'fun': lambda variables: constraint_matrix_elements(variables)},]
+        # Each element in the matrix is a probability, so it must be between 0 and 1
+        bounds = [(0, 1)] * num_variables
+        # If the sum is less than one, we can use diagonal as additional dataset
+        constraints = [{'type': 'ineq', 'fun': lambda variables: row_sums_to_one(variables, num_devices, num_clusters)},
+                       {'type': 'ineq', 'fun': lambda variables: non_negative(variables)},]
         
         # Run the optimization
         x0 = np.array(self.transition_matrices).flatten()

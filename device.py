@@ -153,6 +153,7 @@ class Device():
         # (1) feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
         # or
         # (2) feature_space = np.array(self.dataset).reshape(len(self.dataset), -1)
+        # Update : aggregate only the features, not the labels
         feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
         feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
 
