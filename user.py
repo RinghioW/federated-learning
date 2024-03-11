@@ -55,7 +55,7 @@ class User():
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
-        for i, device in enumerate(self.devices):
+        for device in self.devices:
             teacher = device.model
             train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32)
             ce_loss = nn.CrossEntropyLoss()
@@ -218,13 +218,24 @@ class User():
                 row_sums.extend(1. - row_sum)
             return row_sums
         
+        def non_zero_diagonal(variables, num_devices, num_clusters):
+            # Reshape the flat variables back to the transition matrices shape
+            transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
+            diagonal_elements = []
+            for matrix in transition_matrices:
+                for i in range(min(len(matrix), len(matrix[0]))):
+                    diagonal_elements.append(matrix[i][i])
+            # Subtract a small value to ensure the diagonal is non-zero
+            return np.subtract(diagonal_elements, 10 ** -2)
+        
         num_devices = len(self.devices)
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
         num_variables = num_devices * (num_clusters * num_devices)
         # Each element in the matrix is a probability, so it must be between 0 and 1
         bounds = [(0.,1.)] * num_variables
         # If the sum is less than one, we can use diagonal as additional dataset
-        constraints = [{'type': 'ineq', 'fun': lambda variables: row_less_than_one(variables, num_devices, num_clusters)},]
+        constraints = [{'type': 'ineq', 'fun': lambda variables: row_less_than_one(variables, num_devices, num_clusters)},
+                       {'type': 'ineq', 'fun': lambda variables: non_zero_diagonal(variables, num_devices, num_clusters)},]
         
         # Run the optimization
         x0 = np.array(self.transition_matrices).flatten()
@@ -265,4 +276,5 @@ class User():
         self.kd_dataset = []
         for device in self.devices:
             self.kd_dataset.append(device.kd_dataset)
+        self.kd_dataset = np.array(self.kd_dataset).flatten()
 
