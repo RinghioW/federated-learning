@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import time
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
-from scipy.optimize import minimize
+from scipy.optimize import minimize, Bounds
 import math
 
 class User():
@@ -200,7 +200,7 @@ class User():
         # Equivalent to [1 - Sum(row)] >= 0
         # Note that in original ShuffleFL the constraint is Sum(row) = 1
         # But in this case, we can use the diagonal as additional dataset
-        def row_sums_to_one(variables, num_devices, num_clusters):
+        def row_less_than_one(variables, num_devices, num_clusters):
             # Reshape the flat variables back to the transition matrices shape
             transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
 
@@ -214,18 +214,14 @@ class User():
                 row_sums.extend(1. - row_sum)
             return row_sums
         
-        # Non negative constraint: x >= 0
-        def non_negative(variables):
-            return variables
-        
         num_devices = len(self.devices)
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
         num_variables = num_devices * (num_clusters * num_devices)
         # Each element in the matrix is a probability, so it must be between 0 and 1
-        bounds = [(0, 1)] * num_variables
+        bounds = [Bounds(lb=0.,ub=1., keep_feasible=True)] * num_variables
         # If the sum is less than one, we can use diagonal as additional dataset
-        constraints = [{'type': 'ineq', 'fun': lambda variables: row_sums_to_one(variables, num_devices, num_clusters)},
-                       {'type': 'ineq', 'fun': lambda variables: non_negative(variables)},]
+        # TODO: Note that if we use the bounds to be [0, 1] then we can remove the constraint non_negative
+        constraints = [{'type': 'ineq', 'fun': lambda variables: row_less_than_one(variables, num_devices, num_clusters)},]
         
         # Run the optimization
         x0 = np.array(self.transition_matrices).flatten()
