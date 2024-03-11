@@ -7,7 +7,7 @@ import time
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize, Bounds
 import math
-
+import random
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
@@ -32,9 +32,9 @@ class User():
         self.staleness_factor = 0.0
 
         # Average capability beta
-        self.average_capability = 0.0
-        self.average_power = 0.0
-        self.average_bandwidth = 0.0
+        self.average_capability = 1. + STD_CORRECTION*random.random()
+        self.average_power = 1. + STD_CORRECTION*random.random()
+        self.average_bandwidth = 1. + STD_CORRECTION*random.random()
         self.capability_coefficient = 0.0
 
 
