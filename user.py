@@ -142,7 +142,6 @@ class User():
             samples = sender.remove_data(cluster, percentage_amount)
             # Receiver adds those samples
             receiver.add_data(samples)
-        return
 
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
@@ -244,7 +243,6 @@ class User():
         # Update the transition matrices
         updated_transmission_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
         self.transition_matrices = updated_transmission_matrices
-        return self.transition_matrices
 
     # Compute the average capability of the user compared to last round
     # Implements Equation 8 and Equation 9 from ShuffleFL 
@@ -280,4 +278,3 @@ class User():
         self.kd_dataset = np.array([])
         for device in self.devices:
             self.kd_dataset = np.concatenate((self.kd_dataset, device.kd_dataset), axis=0)
-

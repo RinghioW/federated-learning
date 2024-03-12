@@ -139,4 +139,3 @@ class Device():
         # Cluster datapoints to k classes using KMeans
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
         self.datset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
-        return self.datset_clusters
