@@ -128,7 +128,7 @@ class Device():
     # Append to the knowledge distillation dataset
     def add_kd_data(self, cluster, percentage_amount):
         samples = []
-        amount = math.floor(percentage_amount) # Ensure that the amount is an integer
+        amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
         removed = False
         for i in range(amount):
             for idx, c in enumerate(self.datset_clusters):
