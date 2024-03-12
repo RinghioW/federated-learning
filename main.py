@@ -92,7 +92,7 @@ def main():
             
             # User updates parameters based on last iteration
             user.update_average_capability()
-            
+
             # User measures the system latencies
             user.latency_devices(epochs=device_epochs)
             print(f"System latencies for user {user_idx}: {user.system_latencies}")

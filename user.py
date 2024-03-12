@@ -57,7 +57,7 @@ class User():
         student = self.model
         for device in self.devices:
             teacher = device.model
-            train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32)
+            train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True)
             ce_loss = nn.CrossEntropyLoss()
             optimizer = optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -135,6 +135,10 @@ class User():
 
         receiver = self.devices[receiver_idx]
 
+        # If the receiver is the same as the sender, add the samples to the kd_dataset
+        if sender_idx == receiver_idx:
+            sender.add_kd_data(cluster=cluster, percentage_amount=percentage_amount)
+
         # Sender removes some samples
         samples = sender.remove_data(cluster, percentage_amount)
         # Receiver adds those samples
@@ -146,14 +150,10 @@ class User():
     def shuffle_data(self, transition_matrices):
         # Each device sends data according to the respective transition matrix
         for device_idx, transition_matrix in enumerate(transition_matrices):
-            for cluster in range(len(transition_matrix)):
+            for cluster_idx in range(len(transition_matrix)):
                 for other_device_idx in range(len(transition_matrix[0])):
-                    if device_idx != other_device_idx:
                         # Send data from cluster i to device j
-                        self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster, percentage_amount=transition_matrix[cluster][other_device_idx])
-                    else:
-                        # Elements on the diagonal form the knowledge distillation dataset for the given user
-                        self.devices[device_idx].add_kd_data(cluster=cluster, percentage_amount=transition_matrix[cluster][device_idx])
+                        self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
 
     # Function to implement the dimensionality reduction of the transition matrices
     # The data is embedded into a 2-dimensional space using t-SNE
@@ -173,12 +173,12 @@ class User():
             transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
 
             # Store the current status of the devices
-            current_data = []
+            current_datasets = []
+            current_kd_datasets = []
             for device in self.devices:
-                current_data.append(device.dataset)
-
-            # Reset the number of transferred samples for each device
-            for device in self.devices:
+                current_datasets.append(device.dataset)
+                current_kd_datasets.append(device.kd_dataset)
+                # Reset the number of transferred samples for each device
                 device.num_transferred_samples = 0
             
             # Transfer the data according to the matrices
@@ -188,10 +188,10 @@ class User():
             latencies = self.latency_devices(epochs=1)
             data_imbalances = self.data_imbalance_devices()
 
-            # Restore the original status of the devices
-            for i, device in enumerate(self.devices):
-                device.dataset = current_data[i]
-
+            # Restore the original state of the devices
+            for device_idx, device in enumerate(self.devices):
+                device.dataset = current_datasets[device_idx]
+                device.kd_dataset = current_kd_datasets[device_idx]
             # Compute the loss function
             # The factor of 10 was introduced to increase by an order of magnitude the importance of the time std
             # Time std is usually very small and the max time is usually very large
@@ -203,7 +203,7 @@ class User():
         # Sum(row) <= 1
         # Equivalent to [1 - Sum(row)] >= 0
         # Note that in original ShuffleFL the constraint is Sum(row) = 1
-        # But in this case, we can use the diagonal as additional dataset
+        # But in this case, we can use the same column as an additional dataset
         def row_less_than_one(variables, num_devices, num_clusters):
             # Reshape the flat variables back to the transition matrices shape
             transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
@@ -218,29 +218,34 @@ class User():
                 row_sums.extend(1. - row_sum)
             return row_sums
         
-        def non_zero_diagonal(variables, num_devices, num_clusters):
+        # Constraint to make sure that at least some elements are used for the kd dataset
+        def non_zero_self_column(variables, num_devices, num_clusters):
             # Reshape the flat variables back to the transition matrices shape
             transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
-            diagonal_elements = []
-            for matrix in transition_matrices:
-                for i in range(min(len(matrix), len(matrix[0]))):
-                    diagonal_elements.append(matrix[i][i])
-            # Subtract a small value to ensure the diagonal is non-zero
-            return np.subtract(diagonal_elements, 10 ** -2)
+            self_column = np.array([])
+            for i, matrix in enumerate(transition_matrices):
+                # Extract the column of the matrix that corresponds to the same device
+                self_column = np.append(self_column, [row[i] for row in matrix])
+            # Subtract a small value to ensure the column is non-zero
+            self_column = self_column.flatten()
+            return np.subtract(self_column, 10 ** -2)
         
         num_devices = len(self.devices)
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
         num_variables = num_devices * (num_clusters * num_devices)
         # Each element in the matrix is a probability, so it must be between 0 and 1
         bounds = [(0.,1.)] * num_variables
-        # If the sum is less than one, we can use diagonal as additional dataset
+        # If the sum is less than one, we can use same-device column as additional dataset
         constraints = [{'type': 'ineq', 'fun': lambda variables: row_less_than_one(variables, num_devices, num_clusters)},
-                       {'type': 'ineq', 'fun': lambda variables: non_zero_diagonal(variables, num_devices, num_clusters)},]
+                       {'type': 'ineq', 'fun': lambda variables: non_zero_self_column(variables, num_devices, num_clusters)},]
         
         # Run the optimization
         x0 = np.array(self.transition_matrices).flatten()
         result = minimize(objective_function, x0, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 100, 'ftol': 1e-02, 'disp': True})
-        return result.x, result.fun
+        # Update the transition matrices
+        updated_transmission_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
+        self.transition_matrices = updated_transmission_matrices
+        return self.transition_matrices
 
     # Compute the average capability of the user compared to last round
     # Implements Equation 8 and Equation 9 from ShuffleFL 
@@ -275,6 +280,9 @@ class User():
         # The dataset is then used to train the user model
         self.kd_dataset = []
         for device in self.devices:
+            print(f"Device {device} has {len(device.kd_dataset)} kd samples")
             self.kd_dataset.append(device.kd_dataset)
-        self.kd_dataset = np.array(self.kd_dataset).flatten()
+        self.kd_dataset = np.array(self.kd_dataset)
+        self.kd_dataset = np.concatenate(self.kd_dataset, axis=0)
+        print(f"Knowledge distillation dataset size: {len(self.kd_dataset)}")
 
