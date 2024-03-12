@@ -57,7 +57,7 @@ class User():
         student = self.model
         for device in self.devices:
             teacher = device.model
-            train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True)
+            train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32, num_workers=2)
             ce_loss = nn.CrossEntropyLoss()
             optimizer = optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -277,11 +277,10 @@ class User():
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
-        self.kd_dataset = []
+        self.kd_dataset = np.array([])
         for device in self.devices:
             print(f"Device {device} has {len(device.kd_dataset)} kd samples")
-            self.kd_dataset.append(device.kd_dataset)
-        self.kd_dataset = np.array(self.kd_dataset)
-        self.kd_dataset = np.concatenate(self.kd_dataset, axis=0)
-        print(f"Knowledge distillation dataset size: {len(self.kd_dataset)}")
+            self.kd_dataset = np.concatenate((self.kd_dataset, device.kd_dataset), axis=0)
+        print(f"Shape of device 0 dataset: {np.array(self.devices[0].dataset).shape}")
+        print(f"Shape of the kd dataset: {self.kd_dataset.shape}")
 
