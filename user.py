@@ -132,19 +132,17 @@ class User():
     def send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
         # Identify sender and receiver
         sender = self.devices[sender_idx]
-
         receiver = self.devices[receiver_idx]
 
         # If the receiver is the same as the sender, add the samples to the kd_dataset
         if sender_idx == receiver_idx:
-            print(f"Adding {percentage_amount * 100}% of cluster {cluster} to the kd_dataset of device {receiver_idx}")
             sender.add_kd_data(cluster=cluster, percentage_amount=percentage_amount)
-
-        # Sender removes some samples
-        samples = sender.remove_data(cluster, percentage_amount)
-        # Receiver adds those samples
-        receiver.add_data(samples)
-        return samples
+        else:
+            # Sender removes some samples
+            samples = sender.remove_data(cluster, percentage_amount)
+            # Receiver adds those samples
+            receiver.add_data(samples)
+        return
 
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
