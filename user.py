@@ -136,7 +136,7 @@ class User():
 
         # If the receiver is the same as the sender, add the samples to the kd_dataset
         if sender_idx == receiver_idx:
-            sender.add_kd_data(cluster=cluster, percentage_amount=percentage_amount)
+            sender.remove_data(cluster=cluster, percentage_amount=percentage_amount, add_to_kd_dataset=True)
         else:
             # Sender removes some samples
             samples = sender.remove_data(cluster, percentage_amount)
@@ -279,8 +279,5 @@ class User():
         # The dataset is then used to train the user model
         self.kd_dataset = np.array([])
         for device in self.devices:
-            print(f"Device {device} has {len(device.kd_dataset)} kd samples")
             self.kd_dataset = np.concatenate((self.kd_dataset, device.kd_dataset), axis=0)
-        print(f"Shape of device 0 dataset: {np.array(self.devices[0].dataset).shape}")
-        print(f"Shape of the kd dataset: {self.kd_dataset.shape}")
 

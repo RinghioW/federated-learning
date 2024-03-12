@@ -95,7 +95,7 @@ class Device():
 
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it
-    def remove_data(self, cluster, percentage_amount):
+    def remove_data(self, cluster, percentage_amount, add_to_kd_dataset=False):
         samples = []
         amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
         removed = False
@@ -109,10 +109,14 @@ class Device():
                     break
             if not removed:
                 print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of cluster {cluster} from the dataset.")
-                for idx, sample in enumerate(self.dataset):
-                    print(f"Dataset sample {idx + 1} / {len(self.dataset)}: class {sample["label"]}, cluster {self.datset_clusters[idx]}")
-                # return Exception(f"Could not remove {amount} samples of cluster {cluster} from the dataset")
             removed = False
+
+        # If the data is to be added to the knowledge distillation dataset, do so
+        # And return immediately
+        if add_to_kd_dataset:
+            for sample in samples:
+                self.kd_dataset.append(sample)
+            return samples
 
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount
@@ -123,29 +127,6 @@ class Device():
     def add_data(self, samples):
         for sample in samples:
             np.append(self.dataset, sample)
-        return samples
-    
-    # Append to the knowledge distillation dataset
-    def add_kd_data(self, cluster, percentage_amount):
-        samples = []
-        amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
-        removed = False
-        for i in range(amount):
-            for idx, c in enumerate(self.datset_clusters):
-                if c == cluster:
-                    sample = self.dataset[idx]
-                    samples.append(sample)
-                    np.delete(self.dataset, idx)
-                    removed = True
-                    break
-            if not removed:
-                print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of cluster {cluster} from the dataset.")
-                for idx, sample in enumerate(self.dataset):
-                    print(f"Dataset sample {idx + 1} / {len(self.dataset)}: class {sample["label"]}, cluster {self.datset_clusters[idx]}")
-                # return Exception(f"Could not remove {amount} samples of cluster {cluster} from the dataset")
-            removed = False
-        for sample in samples:
-            self.kd_dataset.append(sample)
         return samples
 
     # Assing each datapoint to a cluster
