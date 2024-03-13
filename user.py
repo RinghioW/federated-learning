@@ -25,17 +25,16 @@ class User():
         
         # System latencies for each device
         self.system_latencies = [0.0] * len(devices)
-        self.adaptive_coefficient = 1.0
+        self.adaptive_scaling_factor = 1.0
         self.data_imbalances = [0.0] * len(devices)
 
         # Staleness factor
         self.staleness_factor = 0.0
 
         # Average capability beta
-        self.average_capability = 1. + STD_CORRECTION*random.random()
+        self.diff_capability = 1. + STD_CORRECTION*random.random()
         self.average_power = 1. + STD_CORRECTION*random.random()
         self.average_bandwidth = 1. + STD_CORRECTION*random.random()
-        self.capability_coefficient = 0.0
 
 
     # Adapt the model to the devices
@@ -194,7 +193,7 @@ class User():
             # The factor of 10 was introduced to increase by an order of magnitude the importance of the time std
             # Time std is usually very small and the max time is usually very large
             # But a better approach would be to normalize the values or take the square of the std
-            return STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_coefficient*np.max(data_imbalances)
+            return STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_scaling_factor*np.max(data_imbalances)
 
         # Define the constraints for the optimization
         # Row sum represents the probability of data of each class that is sent
@@ -248,33 +247,29 @@ class User():
         updated_transmission_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
         self.transition_matrices = updated_transmission_matrices
 
-    # Compute the average capability of the user compared to last round
-    # Implements Equation 8 and Equation 9 from ShuffleFL 
+    # Compute the difference in capability of the user compared to last round
+    # Implements Equation 8 from ShuffleFL 
     def update_average_capability(self):
         # Compute current average power and bandwidth and full dataset size
-        average_power = 0.
-        average_bandwidth = 0.
-        dataset_size = 0
-        for device in self.devices:
-            average_power += device.config["compute"]
-            average_bandwidth += (device.config["uplink_rate"] + device.config["downlink_rate"]) / 2
-            dataset_size += len(device.dataset)
-        average_power /= len(self.devices)
-        average_bandwidth /= len(self.devices)
-        
-        # Compute the number of transferred samples
-        num_transferred_samples = sum([device.num_transferred_samples for device in self.devices])
-        pass
-
-        # Equation 9 in ShuffleFL
-        self.capability_coefficient = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
+        average_power = sum([device.config["compute"] for device in self.devices]) / len(self.devices)
+        average_bandwidth = sum([(device.config["uplink_rate"] + device.config["downlink_rate"]) / 2 for device in self.devices]) / len(self.devices)
         
         # Equation 8 in ShuffleFL
-        self.average_capability = self.capability_coefficient * (average_power / self.average_power) + (1. - self.capability_coefficient) * (average_bandwidth / self.average_bandwidth)
-        # Update the average capability
+        self.diff_capability = self.staleness_factor * (average_power / self.average_power) + (1. - self.staleness_factor) * (average_bandwidth / self.average_bandwidth)
+        
+        # Update the average power and bandwidth
         self.average_power = average_power
         self.average_bandwidth = average_bandwidth
+    
+    # Implements Equation 9 from ShuffleFL
+    def compute_staleness_factor(self):
+        # Compute the dataset size and number of transferred samples
+        dataset_size = sum([len(device.dataset) for device in self.devices])
+        num_transferred_samples = sum([device.num_transferred_samples for device in self.devices])
 
+        # Compute the staleness factor
+        self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
+    
     def create_kd_dataset(self):
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
