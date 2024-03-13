@@ -69,23 +69,20 @@ def main():
     for epoch in range(epochs):
         print(f"FL epoch {epoch+1}/{epochs}")
 
-        # TODO: Implement random selection of the users
+        # Server performs selection of the users
         # ShuffleFL step 3
-        pass
+        server.select_users(users)
 
         # TODO: Server sends the model to the users
         pass
 
-        # TODO: Users report the staleness factor to the server
-        # ShuffleFL step 4
-        pass
-
+        # Users report the staleness factor to the server, and
         # The server sends the adaptive scaling factor to the users
-        # ShuffleFL step 5
+        # ShuffleFL step 4, 5
         server.send_adaptive_scaling_factor()
 
         # ShuffleFL step 6
-        for user_idx, user in enumerate(users):
+        for user_idx, user in enumerate(server.users):
             
             # User adapts the model for their devices
             # ShuffleFL Novelty

@@ -3,13 +3,13 @@ import torch
 from config import DEVICE
 
 class Server():
-    def __init__(self, users, dataset) -> None:
+    def __init__(self, dataset) -> None:
         if dataset == "cifar10":
             self.model = models.mobilenet_v3_large()
         else:
             raise ValueError(f"Invalid dataset. Please choose from valid datasets")
-        self.users = users
-        self.wall_clock_training_times = [1.] * len(users)
+        self.users = None
+        self.wall_clock_training_times = None
         self.scaling_factor = 1.0
 
     # Aggregate the updates from the users
@@ -55,3 +55,9 @@ class Server():
         # Compute adaptive scaling factor for each user
         for idx, user in enumerate(self.users):
             user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * self.scaling_factor
+
+    # Select users for the next round of training
+    # TODO: implement random selection of the users
+    def select_users(self, users):
+        self.users = users
+        self.wall_clock_training_times = [1.] * len(self.users)

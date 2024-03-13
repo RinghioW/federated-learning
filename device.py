@@ -23,7 +23,7 @@ class Device():
         self.num_transferred_samples = 0
 
     def __repr__(self) -> str:
-        return f"Device(config={self.config})"
+        return f"Device({self.config})"
 
     # Initialize transition matrix to be all zeros
     def initialize_transition_matrix(self, num_devices):
