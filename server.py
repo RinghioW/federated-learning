@@ -47,7 +47,7 @@ class Server():
     # Equation 10 in ShuffleFL
     def send_adaptive_scaling_factor(self):
         # Compute estimated performances of the users
-        estimated_performances = [user.average_capability * self.wall_clock_training_times[idx] for idx, user in enumerate(self.users)]
+        estimated_performances = [user.diff_capability * self.wall_clock_training_times[idx] for idx, user in enumerate(self.users)]
 
         # Compute average user performance
         average_user_performance = sum(estimated_performances) / len(estimated_performances)
