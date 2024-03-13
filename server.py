@@ -49,7 +49,7 @@ class Server():
         return loss, accuracy
     
     # Equation 10 in ShuffleFL
-    def adaptive_coefficient_users(self):
+    def send_adaptive_scaling_factor(self):
         # Compute average user latency
         average_user_latency = sum(self.estimated_performances) / len(self.estimated_performances)
         for idx, user in enumerate(self.users):
