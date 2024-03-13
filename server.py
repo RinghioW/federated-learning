@@ -1,7 +1,8 @@
 import torchvision.models as models
 import torch
 from config import DEVICE
-
+import random
+import math
 class Server():
     def __init__(self, dataset) -> None:
         if dataset == "cifar10":
@@ -57,7 +58,6 @@ class Server():
             user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * self.scaling_factor
 
     # Select users for the next round of training
-    # TODO: implement random selection of the users
-    def select_users(self, users):
-        self.users = users
+    def select_users(self, users, split=0.5):
+        self.users = random.choices(users, k=math.floor(split*len(users)))
         self.wall_clock_training_times = [1.] * len(self.users)

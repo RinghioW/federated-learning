@@ -73,9 +73,6 @@ def main():
         # ShuffleFL step 3
         server.select_users(users)
 
-        # TODO: Server sends the model to the users
-        pass
-
         # Users report the staleness factor to the server, and
         # The server sends the adaptive scaling factor to the users
         # ShuffleFL step 4, 5
@@ -86,7 +83,6 @@ def main():
             
             # User adapts the model for their devices
             # ShuffleFL Novelty
-            # TODO : Function should take no arguments
             print(f"Adapting model for user {user_idx+1}/{len(users)}...")
             user.adapt_model(server.model)
 
