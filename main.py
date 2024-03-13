@@ -138,7 +138,7 @@ def main():
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")
-    print(f"Accuracy improvement: {initial_accuracy - accuracy}")
+    print(f"Accuracy improvement: {accuracy - initial_accuracy}")
 
 if __name__ == "__main__":
     main()
