@@ -1,11 +1,11 @@
 import torch
 from config import DEVICE, NUM_CLASSES
 import numpy as np
-from utils import js_divergence
 import pandas as pd
 import math
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
+from scipy.spatial.distance import jensenshannon
 
 class Device():
     def __init__(self, config, dataset, valset) -> None:
@@ -43,7 +43,8 @@ class Device():
             distribution[element["label"]] += 1
 
         # Equation 3 from ShuffleFL
-        return js_divergence(np.array(reference_distribution), np.array(distribution))
+        js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution), base=2) ** 2
+        return js_divergence
 
     # Compute the latency of the device wrt uplink rate, downlink rate, and compute
     # Implements Equation 4, 5 and 6 from ShuffleFL
