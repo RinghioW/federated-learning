@@ -238,8 +238,12 @@ class User():
                        {'type': 'ineq', 'fun': lambda variables: non_zero_self_column(variables, num_devices, num_clusters)},]
         
         # Run the optimization
-        x0 = np.array(self.transition_matrices).flatten()
-        result = minimize(objective_function, x0, method='SLSQP', bounds=bounds, constraints=constraints, options={'maxiter': 100, 'ftol': 1e-02, 'disp': True})
+        current_transition_matrices = np.array(self.transition_matrices).flatten()
+        result = minimize(objective_function,
+                          x0=current_transition_matrices,
+                          method='SLSQP', bounds=bounds,
+                          constraints=constraints,
+                          options={'maxiter': 100, 'ftol': 1e-03})
         # Update the transition matrices
         updated_transmission_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
         self.transition_matrices = updated_transmission_matrices

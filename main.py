@@ -26,7 +26,6 @@ def main():
     datasets = ["cifar10"]
     if dataset not in datasets:
         raise ValueError(f"Invalid dataset. Please choose from {datasets}")
-    
 
     # Number of epochs for on-device trianing
     device_epochs = 3
