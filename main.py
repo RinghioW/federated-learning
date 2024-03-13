@@ -49,7 +49,7 @@ def main():
     devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
     devices_grouped = np.array_split(devices, num_users)
     users = [User(devices_grouped[i]) for i in range(num_users)]
-    server = Server(users, dataset)
+    server = Server(dataset)
 
     # Initialize transition matrices
     for user in users:
@@ -60,8 +60,8 @@ def main():
     
     # Evaluate the server model before training
     print("Evaluating server model before training...")
-    loss, accuracy = server.evaluate(testset)
-    print(f"Initial Loss: {loss}, Initial Accuracy: {accuracy}")
+    initial_loss, initial_accuracy = server.evaluate(testset)
+    print(f"Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}")
 
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
@@ -129,7 +129,7 @@ def main():
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
         print(f"Updating server model...")
-        server.aggregate_updates(users)
+        server.aggregate_updates()
         
         # Server evaluates the model
         print(f"Evaluating trained server model...")
@@ -137,7 +137,8 @@ def main():
         print(f"Final Loss: {loss}, Final Accuracy: {accuracy}")
 
     time_end = time.time()
-    print(f"Elapsed time: {time_end - time_start} seconds. Done.")
+    print(f"Elapsed time: {time_end - time_start} seconds.")
+    print(f"Accuracy improvement: {initial_accuracy - accuracy}")
 
 if __name__ == "__main__":
     main()
