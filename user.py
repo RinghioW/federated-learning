@@ -1,11 +1,8 @@
 import torchvision.models as models
-import torch.nn as nn
-import torch.optim as optim
 import torch
 import numpy as np
-import time
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
-from scipy.optimize import minimize, Bounds
+from scipy.optimize import minimize
 import math
 import random
 class User():
@@ -57,8 +54,8 @@ class User():
         for device in self.devices:
             teacher = device.model
             train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32, num_workers=2)
-            ce_loss = nn.CrossEntropyLoss()
-            optimizer = optim.Adam(student.parameters(), lr=learning_rate)
+            ce_loss = torch.nn.CrossEntropyLoss()
+            optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
             teacher.eval()  # Teacher set to evaluation mode
             student.train() # Student to train mode
@@ -78,8 +75,8 @@ class User():
                     student_logits = student(inputs)
 
                     #Soften the student logits by applying softmax first and log() second
-                    soft_targets = nn.functional.softmax(teacher_logits / T, dim=-1)
-                    soft_prob = nn.functional.log_softmax(student_logits / T, dim=-1)
+                    soft_targets = torch.nn.functional.softmax(teacher_logits / T, dim=-1)
+                    soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
 
                     # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
                     soft_targets_loss = -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
@@ -106,7 +103,7 @@ class User():
         # Communication depends on the transition matrix
         t_communication = 0
         for device_idx, device in enumerate(self.devices):
-            for data_class_idx, data_class in enumerate(device.transition_matrix):
+            for data_class_idx, _ in enumerate(device.transition_matrix):
                 for other_device_idx, other_device in enumerate(self.devices):
                     if device_idx != other_device_idx:
                         # Transmitting

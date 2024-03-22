@@ -1,7 +1,6 @@
 import torch
 from config import DEVICE, NUM_CLASSES
 import numpy as np
-import pandas as pd
 import math
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans

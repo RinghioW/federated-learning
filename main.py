@@ -1,11 +1,10 @@
-import torch
 import numpy as np
 import argparse
 import time
 from device import Device
 from user import User
 from server import Server
-from config import DEVICE
+
 def main():
     
     # Define arguments
@@ -23,19 +22,24 @@ def main():
     dataset = args.dataset
     epochs = args.epochs
 
-    datasets = ["cifar10"]
+    datasets = ["cifar10", "femnist", "shakespeare"]
     if dataset not in datasets:
         raise ValueError(f"Invalid dataset. Please choose from {datasets}")
 
-    # Number of epochs for on-device trianing
-    device_epochs = 3
 
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
         from data.cifar10 import load_datasets
         trainsets, valsets, testset = load_datasets(num_devices)
-    else:
-        pass # Add more datasets here
+    elif dataset == "femnist":
+        from data.femnist import load_datasets
+        trainsets, valsets, testset = load_datasets(num_devices)
+    elif dataset == "shakespeare":
+        from data.shakespeare import load_datasets
+        trainsets, valsets, testset = load_datasets(num_devices)
+
+    # Number of epochs for on-device trianing
+    device_epochs = 3
 
     # Create device configurations
     configs = [{"compute" : np.random.randint(1, 15),
