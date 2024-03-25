@@ -6,7 +6,6 @@ from user import User
 from server import Server
 
 def main():
-    
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
     parser.add_argument("-u", "--users", dest="users", type=int, default=3, help="Total number of users (default: 3)")
@@ -20,12 +19,11 @@ def main():
     num_users = args.users
     num_devices = args.devices
     dataset = args.dataset
-    epochs = args.epochs
+    server_epochs = args.epochs
 
     datasets = ["cifar10", "femnist", "shakespeare"]
     if dataset not in datasets:
         raise ValueError(f"Invalid dataset. Please choose from {datasets}")
-
 
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
@@ -38,8 +36,8 @@ def main():
         from data.shakespeare import load_datasets
         trainsets, valsets, testset = load_datasets(num_devices)
 
-    # Number of epochs for on-device trianing
-    device_epochs = 3
+    # Number of epochs that each device will train for
+    on_device_epochs = 3
 
     # Create device configurations
     configs = [{"compute" : np.random.randint(1, 15),
@@ -70,8 +68,8 @@ def main():
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
-    for epoch in range(epochs):
-        print(f"FL epoch {epoch+1}/{epochs}")
+    for epoch in range(server_epochs):
+        print(f"FL epoch {epoch+1}/{server_epochs}")
 
         # Server performs selection of the users
         # ShuffleFL step 3
@@ -109,12 +107,12 @@ def main():
             # ShuffleFL Novelty
             print(f"Creating knowledge distillation dataset for user {user_idx+1}...")
             user.create_kd_dataset()
-            
+
             # User updates parameters based on last iteration
             user.update_average_capability()
 
             # User measures the system latencies
-            user.latency_devices(epochs=device_epochs)
+            user.latency_devices(epochs=on_device_epochs)
             print(f"System latencies for user {user_idx}: {user.system_latencies}")
 
             # User measures the data imbalance
@@ -123,7 +121,7 @@ def main():
 
             # User trains devices
             # ShuffleFL step 11-15
-            user.train_devices(epochs=device_epochs, verbose=True)
+            user.train_devices(epochs=on_device_epochs, verbose=True)
 
             # User trains the model using knowledge distillation
             # ShuffleFL step 16, 17

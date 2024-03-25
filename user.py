@@ -51,47 +51,55 @@ class User():
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
-        for device in self.devices:
-            teacher = device.model
-            train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32, num_workers=2)
-            ce_loss = torch.nn.CrossEntropyLoss()
-            optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
+        # TODO : Train in parallel, not sequentially (?)
+        teachers = [device.model for device in self.devices] 
+        train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32, num_workers=2)
+        ce_loss = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
-            teacher.eval()  # Teacher set to evaluation mode
+        for epoch in range(epochs):
+            for teacher in teachers:
+                teacher.eval()  # Teacher set to evaluation mode
             student.train() # Student to train mode
 
-            for epoch in range(epochs):
-                running_loss = 0.0
-                for batch in train_loader:
-                    inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+            running_loss = 0.0
+            for batch in train_loader:
+                inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
 
-                    optimizer.zero_grad()
+                optimizer.zero_grad()
 
-                    # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
-                    with torch.no_grad():
-                        teacher_logits = teacher(inputs)
+                # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
+                with torch.no_grad():
+                    # Keep the teacher logits for the soft targets
+                    teacher_logits = []
+                    for teacher in teachers:
+                        logits = teacher(inputs)
+                        teacher_logits.append(logits)
 
-                    # Forward pass with the student model
-                    student_logits = student(inputs)
+                # Forward pass with the student model
+                student_logits = student(inputs)
 
-                    #Soften the student logits by applying softmax first and log() second
-                    soft_targets = torch.nn.functional.softmax(teacher_logits / T, dim=-1)
-                    soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
+                #Soften the student logits by applying softmax first and log() second
+                # Compute the mean of the teacher logits received from all devices
+                # TODO: Does the mean make sense?
+                averaged_teacher_logits = torch.mean(torch.stack(teacher_logits), dim=0)
+                soft_targets = torch.nn.functional.softmax(averaged_teacher_logits / T, dim=-1)
+                soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
 
-                    # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
-                    soft_targets_loss = -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
+                # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
+                soft_targets_loss = -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
 
-                    # Calculate the true label loss
-                    label_loss = ce_loss(student_logits, labels)
+                # Calculate the true label loss
+                label_loss = ce_loss(student_logits, labels)
 
-                    # Weighted sum of the two losses
-                    loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
+                # Weighted sum of the two losses
+                loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
 
-                    loss.backward()
-                    optimizer.step()
+                loss.backward()
+                optimizer.step()
 
-                    running_loss += loss.item()
-                print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
+                running_loss += loss.item()
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
