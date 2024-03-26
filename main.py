@@ -1,10 +1,14 @@
 import numpy as np
 import argparse
-import time
 from device import Device
 from user import User
-from server import Server
 import flwr as fl
+import torch
+import torchvision.models as models
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+NUM_CLASSES = 10
+STD_CORRECTION = 10
 
 def main():
     # Define arguments
@@ -42,7 +46,7 @@ def main():
 
     # Create device configurations
     # TODO: Figure out how to characterize the devices in a way that makes sense
-    configs = [{"compute" : np.random.randint(1, 15),
+    device_configs = [{"compute" : np.random.randint(1, 15),
                 "memory" : np.random.randint(1, 15),
                 "energy_budget" : np.random.randint(1,15),
                 "uplink_rate" : np.random.randint(1,15),
@@ -50,54 +54,17 @@ def main():
                 } for _ in range(num_devices)]
 
     # Create devices and users
-    devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
+    devices = [Device(device_configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
     devices_grouped = np.array_split(devices, num_users)
+
     users = [User(devices_grouped[i]) for i in range(num_users)]
-
-
-    server = Server(dataset)
-
     # Flower: Create a numpy client function
     def user_fn(cid) -> User:
         return users[cid]
 
-    # Initialize transition matrices
-    for user in users:
-        for device in user.devices:
-            device.initialize_transition_matrix(len(user.devices))
-    
-    # Evaluate the server model before training
-    print("Evaluating server model before training...")
-    initial_loss, initial_accuracy = server.evaluate(testset)
-    print(f"Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}")
-
-    # Perform federated learning for the server model
-    # Algorithm 1 in ShuffleFL
-    # ShuffleFL step 1, 2
-    for epoch in range(server_epochs):
-        print(f"FL epoch {epoch+1}/{server_epochs}")
-
-        # Server performs selection of the users
-        # ShuffleFL step 3
-        # TODO: Can be done using Flower when specifying the strategy
-        server.select_users(users)
-
-        # Users report the staleness factor to the server, and
-        # The server sends the adaptive scaling factor to the users
-        # ShuffleFL step 4, 5
-        # TODO : Implement it as a config in flower
-        server.send_adaptive_scaling_factor()
-            
-
-        # Server aggregates the updates from the users
-        # ShuffleFL step 18, 19
-        print(f"Updating server model...")
-        server.aggregate_updates()
-        
-        # Server evaluates the model
-        print(f"Evaluating trained server model...")
-        loss, accuracy = server.evaluate(testset)
-        print(f"Final Loss: {loss}, Final Accuracy: {accuracy}")
+    # Flower: Define the server model
+    if dataset == "cifar10":
+        model = models.mobilenet_v3_large()
 
     def evaluate_fn(
         server_round,
@@ -105,18 +72,50 @@ def main():
         config,
     ):
         # Evaluate the server model after training
-        pass
-        # Compute scaling factors for next round
+        testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=2)
+        net = model
+        """Evaluate the network on the entire test set."""
+        criterion = torch.nn.CrossEntropyLoss()
+        correct, total, loss = 0, 0, 0.0
+        net.eval()
+        with torch.no_grad():
+            for batch in testloader:
+                images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+                outputs = net(images)
+                loss += criterion(outputs, labels).item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+        loss /= len(testloader.dataset)
+        accuracy = correct / total
+    
+        # Compute estimated performances of the users
+        estimated_performances = [user.diff_capability * config["wall_clock_training_times"][idx] for idx, user in enumerate(config["users"])]
+
+        # Compute average user performance
+        average_user_performance = sum(estimated_performances) / len(estimated_performances)
+
+        # Compute adaptive scaling factor for each user
+        for idx, user in enumerate(config["users"]):
+            user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * config["scaling_factor"]
+        return loss, accuracy
+
+    def on_fit_config_fn(server_round):
         pass
 
-    strategy = fl.server.strategy.FedAvg(evaluate_fn=evaluate_fn,)
+    def on_evaluate_config_fn(server_round):
+        pass 
+
+    strategy = fl.server.strategy.FedAvg(evaluate_fn=evaluate_fn,
+                                         on_fit_config_fn=on_fit_config_fn,
+                                         on_evaluate_config_fn=on_evaluate_config_fn,)
+
     # Flower: Start simulation
     fl.simulation.start_simulation(
         client_fn=user_fn,
         num_clients=num_users,
         config=fl.server.ServerConfig(num_rounds=3),  # Just three rounds
-        strategy=fl.server.strategy.FedAvg(),
-        
+        strategy=strategy,
     )
 
 if __name__ == "__main__":

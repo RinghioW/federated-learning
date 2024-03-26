@@ -10,6 +10,10 @@ import flwr as fl
 class User(fl.client.NumPyClient):
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
+        # Initialize transition matrix of devices
+        for device in self.devices:
+            device.initialize_transition_matrix(len(self.devices))
+
         self.kd_dataset = None
         self.model = None
 

@@ -59,9 +59,3 @@ class Server():
         # Compute adaptive scaling factor for each user
         for idx, user in enumerate(self.users):
             user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * self.scaling_factor
-
-    # Select users for the next round of training
-    # TODO: Consider tier-based selection (TiFL) instead of random selection
-    def select_users(self, users, split=0.5):
-        self.users = random.choices(users, k=math.floor(split*len(users)))
-        self.wall_clock_training_times = [1.] * len(self.users)
