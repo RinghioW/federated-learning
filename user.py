@@ -36,7 +36,7 @@ class User():
 
     # Adapt the model to the devices
     # Uses quantization
-    # TODO : use more adaptation techniques
+    # TODO : ditch quantization. Instead, use torch.nn.utils.prune and torch.pca_lowrank
     def adapt_model(self, model):
         self.model = model
         for device in self.devices:

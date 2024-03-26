@@ -18,6 +18,7 @@ class Server():
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient
     # Step 18 in the ShuffleFL algorithm
+    # TODO: Use FedAvg instead of parameter averaging (aggregate the gradients instead of the weights)
     def aggregate_updates(self):
         sum_weights = self.users[0].model.state_dict()
         for user in self.users[1:]:

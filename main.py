@@ -40,6 +40,7 @@ def main():
     on_device_epochs = 3
 
     # Create device configurations
+    # TODO: Figure out how to characterize the devices in a way that makes sense
     configs = [{"compute" : np.random.randint(1, 15),
                 "memory" : np.random.randint(1, 15),
                 "energy_budget" : np.random.randint(1,15),
