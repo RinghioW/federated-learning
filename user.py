@@ -285,6 +285,8 @@ class User(fl.client.NumPyClient):
         for device in self.devices:
             self.kd_dataset = np.concatenate((self.kd_dataset, device.kd_dataset), axis=0)
     
+    # ================================ Flower functions ================================
+            
     # Flower functions to implement the NumPyClient interface
     def get_parameters(self):
         return self.model.state_dict()
@@ -296,13 +298,60 @@ class User(fl.client.NumPyClient):
     def fit(self, parameters, config):
         if parameters is not None:
             self.set_parameters(parameters)
-        self.train_devices(epochs=config["epochs"], verbose=config["verbose"])
+        # User adapts the model for their devices
+        # ShuffleFL Novelty
+        print(f"Adapting model for user {config["cid"]}...")
+        self.adapt_model(config["server_model"])
+
+        # Adapt scaling factor as sent by the server
+        # user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * self.scaling_factor
+        self.adaptive_scaling_factor = config["adaptive_scaling_factor"]
+
+        # Reduce dimensionality of the transmission matrices
+        # ShuffleFL step 7, 8
+        print(f"Reducing feature space for user {config["cid"]}...")
+        self.reduce_dimensionality()
+        
+        # User optimizes the transmission matrices
+        # ShuffleFL step 9
+        print(f"Optimizing transition matrices for user {config["cid"]}...")
+        self.optimize_transmission_matrices()
+
+        # User shuffles the data
+        # ShuffleFL step 10
+        print(f"Shuffling data for user {config["cid"]}...")
+        self.shuffle_data(self.transition_matrices)
+
+        # User creates the knowledge distillation dataset
+        # ShuffleFL Novelty
+        print(f"Creating knowledge distillation dataset for user {config["cid"]}...")
+        self.create_kd_dataset()
+
+        # User updates parameters based on last iteration
+        self.update_average_capability()
+
+        # User measures the system latencies
+        self.latency_devices(epochs=config["on_device_epochs"])
+        print(f"System latencies for user {config["cid"]}: {self.system_latencies}")
+
+        # User measures the data imbalance
+        self.data_imbalance_devices()
+        print(f"Data imbalance for user {config["cid"]}: {self.data_imbalances}")
+
+        # User trains devices
+        # ShuffleFL step 11-15
+        self.train_devices(epochs=config["on_device_epochs"], verbose=True)
+
+        # User trains the model using knowledge distillation
+        # ShuffleFL step 16, 17
+        print(f"Aggregating updates from user {config["cid"]}...")
         self.aggregate_updates()
-        return self.get_parameters()
+
+        # Return model parameters, length of the dataset, and config (system latencies and data imbalances)
+        return self.get_parameters(), len(self.kd_dataset), {"system_latencies": self.system_latencies, "data_imbalances": self.data_imbalances}
     
     def evaluate(self, parameters, config):
-        self.set_parameters(parameters)
-        accuracy = self.compute_accuracy()
-        return accuracy
+        # TODO: Figure out what to do here
+        pass
 
 
