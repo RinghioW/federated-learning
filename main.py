@@ -4,6 +4,7 @@ import time
 from device import Device
 from user import User
 from server import Server
+import flwr as fl
 
 def main():
     # Define arguments
@@ -52,12 +53,26 @@ def main():
     devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
     devices_grouped = np.array_split(devices, num_users)
     users = [User(devices_grouped[i]) for i in range(num_users)]
+
+
     server = Server(dataset)
+
+    # Flower: Create a numpy client function
+    def user_fn(cid) -> User:
+        return users[cid]
 
     # Initialize transition matrices
     for user in users:
         for device in user.devices:
             device.initialize_transition_matrix(len(user.devices))
+
+    # Flower: Start simulation
+    fl.simulation.start_simulation(
+        client_fn=user_fn,
+        num_clients=num_users,
+        config=fl.server.ServerConfig(num_rounds=3),  # Just three rounds
+        strategy=fl.server.strategy.FedAvg(),
+    )
 
     time_start = time.time()
     
@@ -74,6 +89,7 @@ def main():
 
         # Server performs selection of the users
         # ShuffleFL step 3
+        # Can be done using Flower
         server.select_users(users)
 
         # Users report the staleness factor to the server, and

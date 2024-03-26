@@ -5,7 +5,9 @@ from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
 import math
 import random
-class User():
+import flwr as fl
+
+class User(fl.client.NumPyClient):
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
         self.kd_dataset = None
@@ -282,3 +284,25 @@ class User():
         self.kd_dataset = np.array([])
         for device in self.devices:
             self.kd_dataset = np.concatenate((self.kd_dataset, device.kd_dataset), axis=0)
+    
+    # Flower functions to implement the NumPyClient interface
+    def get_parameters(self):
+        return self.model.state_dict()
+    
+    def set_parameters(self, parameters):
+        if parameters is not None:
+            self.model.load_state_dict(parameters)
+    
+    def fit(self, parameters, config):
+        if parameters is not None:
+            self.set_parameters(parameters)
+        self.train_devices(epochs=config["epochs"], verbose=config["verbose"])
+        self.aggregate_updates()
+        return self.get_parameters()
+    
+    def evaluate(self, parameters, config):
+        self.set_parameters(parameters)
+        accuracy = self.compute_accuracy()
+        return accuracy
+
+
