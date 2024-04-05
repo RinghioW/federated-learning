@@ -4,7 +4,7 @@ from flwr_datasets import FederatedDataset
 BATCH_SIZE = 32
 
 def load_datasets(num_clients):
-    fds = FederatedDataset(dataset="cifar10", partitioners={"train": num_clients*10})
+    fds = FederatedDataset(dataset="cifar10", partitioners={"train": num_clients})
 
     def apply_transforms(batch):
         # Instead of passing transforms to CIFAR10(..., transform=transform)
@@ -28,5 +28,5 @@ def load_datasets(num_clients):
         partition = partition.train_test_split(train_size=0.8)
         trainsets.append(partition["train"])
         valsets.append(partition["test"])
-    testset = fds.load_full("test").with_transform(apply_transforms)
+    testset = fds.load_split("test").with_transform(apply_transforms)
     return trainsets, valsets, testset

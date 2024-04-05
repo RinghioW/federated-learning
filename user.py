@@ -18,7 +18,7 @@ class User():
         # Also used by equation 7 as the optimization variable for the argmin
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        self.transition_matrices = [np.zeros((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int)] * len(devices)
+        self.transition_matrices = [np.zeros((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=float)] * len(devices)
         
         # System latencies for each device
         self.adaptive_scaling_factor = 1.0
@@ -173,6 +173,7 @@ class User():
         def objective_function(x):
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
+            print(f"Current transfer matrices: {transfer_matrices}")
 
             # Store the current status of the devices
             current_datasets = []
@@ -185,7 +186,6 @@ class User():
             
             # Transfer the data according to the matrices
             self.shuffle_data(transfer_matrices)
-
             # Compute the resulting system latencies and data imbalances
             latencies = self.get_latencies(epochs=1)
             data_imbalances = self.get_data_imbalances()
@@ -206,11 +206,11 @@ class User():
         # Equivalent to [1 - Sum(row)] >= 0
         # Note that in original ShuffleFL the constraint is Sum(row) = 1
         # But in this case, we can use the same column as an additional dataset
-        def row_less_than_one(variables, num_devices, num_clusters):
+        def one_minus_sum_rows(variables, num_devices, num_clusters):
             # Reshape the flat variables back to the transition matrices shape
             transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
 
-            # Calculate the row sums for each matrix and ensure they sum to 1
+            # Calculate the row sums ford each matrix and ensure they sum to 1
             # Because each row is the distribution of the data of a class for a device
             row_sums = []
             for matrix in transition_matrices:
@@ -238,7 +238,7 @@ class User():
         # Each element in the matrix is a probability, so it must be between 0 and 1
         bounds = [(0.,1.)] * num_variables
         # If the sum is less than one, we can use same-device column as additional dataset
-        constraints = [{'type': 'ineq', 'fun': lambda variables: row_less_than_one(variables, num_devices, num_clusters)},
+        constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)},
                        {'type': 'ineq', 'fun': lambda variables: non_zero_self_column(variables, num_devices, num_clusters)},]
         
         # Run the optimization
@@ -250,7 +250,9 @@ class User():
                           options={'maxiter': 100, 'ftol': 1e-03})
         # Update the transition matrices
         self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
-
+        print(f"Result of optimization: {self.transition_matrices}")
+    
+    
     # Compute the difference in capability of the user compared to last round
     # Implements Equation 8 from ShuffleFL 
     def update_average_capability(self):
