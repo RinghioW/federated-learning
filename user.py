@@ -21,9 +21,7 @@ class User():
         self.transition_matrices = [np.zeros((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=int)] * len(devices)
         
         # System latencies for each device
-        self.system_latencies = [0.0] * len(devices)
         self.adaptive_scaling_factor = 1.0
-        self.data_imbalances = [0.0] * len(devices)
 
         # Staleness factor
         self.staleness_factor = 0.0
@@ -42,9 +40,7 @@ class User():
         for device in self.devices:
             # Adaptation is based on the device resources
             if device.config["compute"] < 5:
-                device.model = models.quantization.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT, quantize=False)
-            elif device.config["compute"] < 10:
-                device.model = models.quantization.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT, quantize=False)
+                device.model = models.quantization.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
             else:
                 device.model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
     
@@ -107,31 +103,35 @@ class User():
         for device in self.devices:
             device.train(epochs, verbose)
     
-    def total_latency_devices(self, epochs):
-        # Communication depends on the transition matrix
-        t_communication = 0
+    def get_latencies(self, epochs):
+        t_communication = [0.] * len(self.devices)
+        t_computation = [0.] * len(self.devices)
+        latencies = [0.] * len(self.devices)
+        
+        # For each device, compute communication and computation time
         for device_idx, device in enumerate(self.devices):
-            for data_class_idx, _ in enumerate(device.transition_matrix):
+            transition_matrix = self.transition_matrices[device_idx]
+            # Compute the communication time
+            for data_class_idx, _ in enumerate(transition_matrix):
                 for other_device_idx, other_device in enumerate(self.devices):
+                    other_transition_matrix = self.transition_matrices[other_device_idx]
                     if device_idx != other_device_idx:
                         # Transmitting
-                        t_communication += device.transition_matrix[data_class_idx][other_device_idx] * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
+                        t_communication[device_idx] += transition_matrix[data_class_idx][other_device_idx] * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
                         # Receiving
-                        t_communication += other_device.transition_matrix[data_class_idx][device_idx] * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
-        t_computation = 0
+                        t_communication[device_idx] += other_transition_matrix[data_class_idx][device_idx] * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
+            # Compute the computation time
+            t_computation[device_idx] += 3 * epochs * len(device.dataset) * device.config["compute"]
+            
+            # Compute the latency as the sum of both
+            latencies[device_idx] = t_communication[device_idx] + t_computation[device_idx]
+        return latencies
+    
+    def get_data_imbalances(self):
+        data_imbalances = []
         for device in self.devices:
-            t_computation += 3 * epochs * len(device.dataset) * device.config["compute"]
-        return t_communication + t_computation
-    
-    def latency_devices(self, epochs):
-        for i, device in enumerate(self.devices):
-            self.system_latencies[i] = device.latency(devices=self.devices, device_idx=i, epochs=epochs)
-        return self.system_latencies
-    
-    def data_imbalance_devices(self):
-        for i, device in enumerate(self.devices):
-            self.data_imbalances[i] = device.data_imbalance()
-        return self.data_imbalances
+            data_imbalances.append(device.data_imbalance())
+        return data_imbalances
     
     def send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
         # Identify sender and receiver
@@ -187,8 +187,8 @@ class User():
             self.shuffle_data(transfer_matrices)
 
             # Compute the resulting system latencies and data imbalances
-            latencies = self.latency_devices(epochs=1)
-            data_imbalances = self.data_imbalance_devices()
+            latencies = self.get_latencies(epochs=1)
+            data_imbalances = self.get_data_imbalances()
 
             # Restore the original state of the devices
             for device_idx, device in enumerate(self.devices):
@@ -249,8 +249,7 @@ class User():
                           constraints=constraints,
                           options={'maxiter': 100, 'ftol': 1e-03})
         # Update the transition matrices
-        updated_transmission_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
-        self.transition_matrices = updated_transmission_matrices
+        self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
 
     # Compute the difference in capability of the user compared to last round
     # Implements Equation 8 from ShuffleFL 

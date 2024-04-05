@@ -54,11 +54,6 @@ def main():
     users = [User(devices_grouped[i]) for i in range(num_users)]
     server = Server(dataset)
 
-    # Initialize transition matrices
-    for user in users:
-        for device in user.devices:
-            device.initialize_transition_matrix(len(user.devices))
-
     time_start = time.time()
     
     # Evaluate the server model before training
@@ -74,7 +69,7 @@ def main():
 
         # Server performs selection of the users
         # ShuffleFL step 3
-        server.select_users(users)
+        server.select_users(users, split=1.0)
 
         # Users report the staleness factor to the server, and
         # The server sends the adaptive scaling factor to the users
@@ -89,6 +84,14 @@ def main():
             print(f"Adapting model for user {user_idx+1}/{len(users)}...")
             user.adapt_model(server.model)
 
+            # User measures the system latencies
+            latencies = user.get_latencies(epochs=on_device_epochs)
+            print(f"Pre-shuffling system latencies for user {user_idx+1}: {latencies}")
+
+            # User measures the data imbalance
+            data_imbalances = user.get_data_imbalances()
+            print(f"Pre-shuffling imbalance for user {user_idx+1}: {data_imbalances}")
+            
             # Reduce dimensionality of the transmission matrices
             # ShuffleFL step 7, 8
             print(f"Reducing feature space for user {user_idx+1}...")
@@ -113,12 +116,12 @@ def main():
             user.update_average_capability()
 
             # User measures the system latencies
-            user.latency_devices(epochs=on_device_epochs)
-            print(f"System latencies for user {user_idx}: {user.system_latencies}")
+            latencies = user.get_latencies(epochs=on_device_epochs)
+            print(f"System latencies for user {user_idx+1}: {latencies}")
 
             # User measures the data imbalance
-            user.data_imbalance_devices()
-            print(f"Data imbalance for user {user_idx}: {user.data_imbalances}")
+            data_imbalances = user.get_data_imbalances()
+            print(f"Data imbalance for user {user_idx+1}: {data_imbalances}")
 
             # User trains devices
             # ShuffleFL step 11-15
@@ -126,7 +129,7 @@ def main():
 
             # User trains the model using knowledge distillation
             # ShuffleFL step 16, 17
-            print(f"Aggregating updates from user {user_idx}...")
+            print(f"Aggregating updates from user {user_idx+1}...")
             user.aggregate_updates()
 
         # Server aggregates the updates from the users

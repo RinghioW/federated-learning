@@ -10,23 +10,18 @@ class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
         self.dataset = dataset
+        # The knowledge distillation dataset is created by sending a fraction of the dataset to itself when optimizing the transmission matrix
+        self.kd_dataset = []
 
         self.valset = valset
         self.model = None
-        self.transition_matrix = None # Size is not known a priori, depends on the number of devices
 
         self.datset_clusters = [None] * len(self.dataset) # For each sample, the cluster that the sample belongs to
 
-        # The knowledge distillation dataset is created by sending a fraction of the dataset to itself when optimizing the transmission matrix
-        self.kd_dataset = [] # The dataset that is used for knowledge distillation
         self.num_transferred_samples = 0
 
     def __repr__(self) -> str:
         return f"Device({self.config})"
-
-    # Initialize transition matrix to be all zeros
-    def initialize_transition_matrix(self, num_devices):
-        self.transition_matrix = np.zeros((NUM_CLASSES, num_devices), dtype=int)
 
     # Compute the JS divergence between the reference balanced distribution and the actual data distribution
     # Implements Equation 3 from ShuffleFL
@@ -44,26 +39,6 @@ class Device():
         # Equation 3 from ShuffleFL
         js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution), base=2) ** 2
         return js_divergence
-
-    # Compute the latency of the device wrt uplink rate, downlink rate, and compute
-    # Implements Equation 4, 5 and 6 from ShuffleFL
-    def latency(self, device_idx, devices, epochs):
-        # Communication depends on the transition matrix
-        # Equation 5 from ShuffleFL
-        t_communication = 0
-        for data_class_idx, data_class in enumerate(self.transition_matrix):
-            for other_device_idx, other_device in enumerate(devices):
-                if device_idx != other_device_idx:
-                    # Transmitting
-                    t_communication += self.transition_matrix[data_class_idx][other_device_idx] * ((1/self.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
-                    # Receiving
-                    t_communication += other_device.transition_matrix[data_class_idx][device_idx] * ((1/self.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
-
-        # Equation 6 from ShuffleFL
-        t_computation = 3 * epochs * len(self.dataset) * self.config["compute"]
-
-        # Equation 4 from ShuffleFL
-        return t_communication + t_computation
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs=5, verbose=True):
@@ -127,7 +102,6 @@ class Device():
     def add_data(self, samples):
         for sample in samples:
             np.append(self.dataset, sample)
-        return samples
 
     # Assing each datapoint to a cluster
     def cluster_data(self, shrinkage_ratio):

@@ -29,6 +29,7 @@ class Server():
         self.model.load_state_dict(sum_weights)
 
     # Evaluate the server model on the test set
+    # TODO: Find a way to compare this evaluation to some other H-FL method
     def evaluate(self, testset):
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=2)
         net = self.model
