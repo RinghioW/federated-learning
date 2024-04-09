@@ -5,6 +5,8 @@ import math
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
 from scipy.spatial.distance import jensenshannon
+import time
+import torchvision.transforms as transforms
 
 class Device():
     def __init__(self, config, dataset, valset) -> None:
@@ -31,7 +33,9 @@ class Device():
         reference_distribution = [len(self.dataset)/NUM_CLASSES] * NUM_CLASSES
 
         # Compute the JS divergence between the reference distribution and the actual data distribution
-        dataloader = torch.utils.data.DataLoader(self.dataset)
+        to_tensor = transforms.ToTensor()
+        dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+        dataloader = torch.utils.data.DataLoader(dataset, num_workers = 3)
         distribution = [0] * NUM_CLASSES
         for element in dataloader:
             distribution[element["label"]] += 1
@@ -45,7 +49,9 @@ class Device():
         if self.model is None or self.dataset is None:
             raise ValueError("Model or dataset is None.")
         net = self.model
-        trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=32, shuffle=True, num_workers=2)
+        to_tensor = transforms.ToTensor()
+        dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+        trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, num_workers=3)
         """Train the network on the training set."""
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(net.parameters())
@@ -75,6 +81,7 @@ class Device():
         amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
         removed = False
         for i in range(amount):
+            print(f"Removing {i+1}/{amount} samples of cluster {cluster} from the dataset.")
             for idx, c in enumerate(self.datset_clusters):
                 if c == cluster:
                     sample = self.dataset[idx]
@@ -107,9 +114,12 @@ class Device():
     def cluster_data(self, shrinkage_ratio):
         # Use t-SNE to embed the dataset into 2D space
         # Aggregate only the features, not the labels
+        start = time.time()
         feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
         feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
-
+        checkpoint = time.time()
+        print(f"t-SNE took {checkpoint - start} seconds")
         # Cluster datapoints to k classes using KMeans
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
         self.datset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
+        print(f"KMeans took {time.time() - checkpoint} seconds")

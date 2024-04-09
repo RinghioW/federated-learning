@@ -3,6 +3,7 @@ import torch
 from config import DEVICE
 import random
 import math
+import torchvision
 class Server():
     def __init__(self, dataset) -> None:
         if dataset == "cifar10":
@@ -31,7 +32,9 @@ class Server():
     # Evaluate the server model on the test set
     # TODO: Find a way to compare this evaluation to some other H-FL method
     def evaluate(self, testset):
-        testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=2)
+        to_tensor = torchvision.transforms.ToTensor()
+        testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+        testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)
         net = self.model
         """Evaluate the network on the entire test set."""
         criterion = torch.nn.CrossEntropyLoss()

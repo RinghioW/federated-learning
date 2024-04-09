@@ -5,6 +5,7 @@ from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
 import math
 import random
+import torchvision
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
@@ -18,7 +19,7 @@ class User():
         # Also used by equation 7 as the optimization variable for the argmin
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        self.transition_matrices = [np.zeros((math.floor(classes*self.shrinkage_ratio), len(devices)), dtype=float)] * len(devices)
+        self.transition_matrices = [np.full(shape=(math.floor(classes*self.shrinkage_ratio), len(devices)), fill_value=0.001, dtype=float)] * len(devices)
         
         # System latencies for each device
         self.adaptive_scaling_factor = 1.0
@@ -40,16 +41,18 @@ class User():
         for device in self.devices:
             # Adaptation is based on the device resources
             if device.config["compute"] < 5:
-                device.model = models.quantization.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
+                device.model = models.quantization.mobilenet_v2()
             else:
-                device.model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+                device.model = models.mobilenet_v3_small()
     
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
         # TODO : Train in parallel, not sequentially (?)
-        teachers = [device.model for device in self.devices] 
-        train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, batch_size=32, num_workers=2)
+        teachers = [device.model for device in self.devices]
+        to_tensor = torchvision.transforms.ToTensor() 
+        kd_dataset = self.kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -117,9 +120,11 @@ class User():
                     other_transition_matrix = self.transition_matrices[other_device_idx]
                     if device_idx != other_device_idx:
                         # Transmitting
-                        t_communication[device_idx] += transition_matrix[data_class_idx][other_device_idx] * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
+                        num_transmitted_samples = len(device.dataset) * transition_matrix[data_class_idx][other_device_idx]
+                        t_communication[device_idx] += num_transmitted_samples * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
                         # Receiving
-                        t_communication[device_idx] += other_transition_matrix[data_class_idx][device_idx] * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
+                        num_received_samples = len(other_device.dataset) * other_transition_matrix[data_class_idx][device_idx]
+                        t_communication[device_idx] += num_received_samples * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
             # Compute the computation time
             t_computation[device_idx] += 3 * epochs * len(device.dataset) * device.config["compute"]
             
@@ -155,6 +160,7 @@ class User():
             for cluster_idx in range(len(transition_matrix)):
                 for other_device_idx in range(len(transition_matrix[0])):
                         # Send data from cluster i to device j
+                        print(f"Sending data from device {device_idx} to device {other_device_idx} in cluster {cluster_idx}")
                         self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
 
     # Function to implement the dimensionality reduction of the transition matrices
@@ -184,12 +190,14 @@ class User():
                 # Reset the number of transferred samples for each device
                 device.num_transferred_samples = 0
             
+            print("Starting to shuffle")
             # Transfer the data according to the matrices
             self.shuffle_data(transfer_matrices)
             # Compute the resulting system latencies and data imbalances
+            print("Computing latencies and imbalances")
             latencies = self.get_latencies(epochs=1)
             data_imbalances = self.get_data_imbalances()
-
+            print(f"Latencies: {latencies}, Data imbalances: {data_imbalances}")
             # Restore the original state of the devices
             for device_idx, device in enumerate(self.devices):
                 device.dataset = current_datasets[device_idx]
@@ -230,7 +238,7 @@ class User():
                 self_column = np.append(self_column, [row[i] for row in matrix])
             # Subtract a small value to ensure the column is non-zero
             self_column = self_column.flatten()
-            return np.subtract(self_column, 10 ** -2)
+            return np.subtract(self_column, 10 ** -3)
         
         num_devices = len(self.devices)
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
@@ -245,9 +253,9 @@ class User():
         current_transition_matrices = np.array(self.transition_matrices).flatten()
         result = minimize(objective_function,
                           x0=current_transition_matrices,
-                          method='SLSQP', bounds=bounds,
+                          method='L-BFGS-B', bounds=bounds,
                           constraints=constraints,
-                          options={'maxiter': 100, 'ftol': 1e-03})
+                          options={'maxiter': 50, 'ftol': 1e-03})
         # Update the transition matrices
         self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
         print(f"Result of optimization: {self.transition_matrices}")
