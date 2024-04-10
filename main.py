@@ -41,12 +41,15 @@ def main():
 
     # Create device configurations
     # TODO: Figure out how to characterize the devices in a way that makes sense
-    configs = [{"compute" : np.random.randint(1, 15),
+    configs = [{"id" : i,
+                "compute" : np.random.randint(1, 15),
                 "memory" : np.random.randint(1, 15),
                 "energy_budget" : np.random.randint(1,15),
                 "uplink_rate" : np.random.randint(1,15),
                 "downlink_rate" : np.random.randint(1,15)
-                } for _ in range(num_devices)]
+                } for i in range(num_devices)]
+
+    print(f"Device configurations: {configs}")
 
     # Create devices and users
     devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]

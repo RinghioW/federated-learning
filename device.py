@@ -33,14 +33,12 @@ class Device():
         # The reference data distribution is a balanced distribution, all classes have the same number of samples
         reference_distribution = [len(self.dataset)/NUM_CLASSES] * NUM_CLASSES
 
-        # Compute the JS divergence between the reference distribution and the actual data distribution
-        to_tensor = transforms.ToTensor()
-        dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        dataloader = torch.utils.data.DataLoader(dataset, num_workers = 3)
+        # Compute the JS divergence between the reference distribution and the actual data distribution<w
         distribution = [0] * NUM_CLASSES
-        for element in dataloader:
-            distribution[element["label"]] += 1
-
+        dataset = np.array(self.dataset)
+        for sample in dataset:
+            distribution[sample["label"]] += 1
+        print(distribution)
         # Equation 3 from ShuffleFL
         js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution), base=2) ** 2
         return js_divergence
