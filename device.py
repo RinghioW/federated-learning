@@ -7,6 +7,7 @@ from sklearn.cluster import KMeans
 from scipy.spatial.distance import jensenshannon
 import time
 import torchvision.transforms as transforms
+import datasets
 
 class Device():
     def __init__(self, config, dataset, valset) -> None:
@@ -80,18 +81,21 @@ class Device():
         samples = []
         amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
         removed = False
+        truncated_dataset = np.array(self.dataset)
         for i in range(amount):
             print(f"Removing {i+1}/{amount} samples of cluster {cluster} from the dataset.")
             for idx, c in enumerate(self.datset_clusters):
                 if c == cluster:
                     sample = self.dataset[idx]
+                    print(sample)
                     samples.append(sample)
-                    np.delete(self.dataset, idx)
+                    truncated_dataset = np.delete(truncated_dataset, idx, axis=0)
                     removed = True
                     break
             if not removed:
                 print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of cluster {cluster} from the dataset.")
             removed = False
+        self.dataset = datasets.Dataset.from_list(truncated_dataset.tolist())
 
         # If the data is to be added to the knowledge distillation dataset, do so
         # And return immediately

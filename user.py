@@ -179,7 +179,7 @@ class User():
         def objective_function(x):
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
-            print(f"Current transfer matrices: {transfer_matrices}")
+            print(f"Current transfer matrices:\n {transfer_matrices}")
 
             # Store the current status of the devices
             current_datasets = []
@@ -253,7 +253,7 @@ class User():
         current_transition_matrices = np.array(self.transition_matrices).flatten()
         result = minimize(objective_function,
                           x0=current_transition_matrices,
-                          method='L-BFGS-B', bounds=bounds,
+                          method='SLSQP', bounds=bounds,
                           constraints=constraints,
                           options={'maxiter': 50, 'ftol': 1e-03})
         # Update the transition matrices

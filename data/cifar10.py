@@ -1,6 +1,6 @@
 import torchvision.transforms
 from flwr_datasets import FederatedDataset
-
+import torch
 BATCH_SIZE = 32
 
 def load_datasets(num_clients):
