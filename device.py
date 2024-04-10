@@ -78,30 +78,30 @@ class Device():
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it
     def remove_data(self, cluster, percentage_amount, add_to_kd_dataset=False):
-        samples = []
+        samples = np.array([])
         amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
         removed = False
         truncated_dataset = np.array(self.dataset)
         for i in range(amount):
-            print(f"Removing {i+1}/{amount} samples of cluster {cluster} from the dataset.")
             for idx, c in enumerate(self.datset_clusters):
                 if c == cluster:
-                    sample = self.dataset[idx]
-                    print(sample)
-                    samples.append(sample)
+                    # Add the sample to the list of samples to be sent if it matches the cluster
+                    samples = np.append(samples, [self.dataset[idx]], axis=0)
+                    # Remove the sample from the dataset and the dataset clusters
+                    self.datset_clusters = np.delete(self.datset_clusters, idx, axis=0)
                     truncated_dataset = np.delete(truncated_dataset, idx, axis=0)
                     removed = True
                     break
             if not removed:
                 print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of cluster {cluster} from the dataset.")
             removed = False
+        # Update the dataset
         self.dataset = datasets.Dataset.from_list(truncated_dataset.tolist())
-
+        samples = samples.tolist()
         # If the data is to be added to the knowledge distillation dataset, do so
         # And return immediately
         if add_to_kd_dataset:
-            for sample in samples:
-                self.kd_dataset.append(sample)
+            self.kd_dataset.extend(samples)
             return samples
 
         # Update the number of samples that have been sent
@@ -111,8 +111,11 @@ class Device():
 
     # Used in the transfer function to receive data from a different device
     def add_data(self, samples):
-        for sample in samples:
-            np.append(self.dataset, sample)
+        dataset = np.array(self.dataset)
+        dataset = np.append(dataset, samples, axis=0)
+        self.dataset = datasets.Dataset.from_list(dataset.tolist())
+
+
 
     # Assing each datapoint to a cluster
     def cluster_data(self, shrinkage_ratio):
