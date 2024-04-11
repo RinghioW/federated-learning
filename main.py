@@ -49,7 +49,7 @@ def main():
                 "downlink_rate" : np.random.randint(1,15)
                 } for i in range(num_devices)]
 
-    print(f"Device configurations: {configs}")
+    print(f"Device configurations:\n {configs}")
 
     # Create devices and users
     devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]

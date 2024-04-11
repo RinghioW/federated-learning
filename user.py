@@ -6,10 +6,11 @@ from scipy.optimize import minimize
 import math
 import random
 import torchvision
+import datasets
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
-        self.kd_dataset = None
+        self.kd_dataset = []
         self.model = None
 
         # SHUFFLE-FL
@@ -19,7 +20,7 @@ class User():
         # Also used by equation 7 as the optimization variable for the argmin
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        self.transition_matrices = [np.full(shape=(math.floor(classes*self.shrinkage_ratio), len(devices)), fill_value=0.001, dtype=float)] * len(devices)
+        self.transition_matrices = [np.full(shape=(math.floor(classes*self.shrinkage_ratio), len(devices)), fill_value=0.1, dtype=float)] * len(devices)
         
         # System latencies for each device
         self.adaptive_scaling_factor = 1.0
@@ -50,8 +51,9 @@ class User():
         student = self.model
         # TODO : Train in parallel, not sequentially (?)
         teachers = [device.model for device in self.devices]
-        to_tensor = torchvision.transforms.ToTensor() 
-        kd_dataset = self.kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+        to_tensor = torchvision.transforms.ToTensor()
+        kd_dataset = datasets.Dataset.from_list(self.kd_dataset)
+        kd_dataset = kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
@@ -78,7 +80,7 @@ class User():
                 # Forward pass with the student model
                 student_logits = student(inputs)
 
-                #Soften the student logits by applying softmax first and log() second
+                # Soften the student logits by applying softmax first and log() second
                 # Compute the mean of the teacher logits received from all devices
                 # TODO: Does the mean make sense?
                 averaged_teacher_logits = torch.mean(torch.stack(teacher_logits), dim=0)
@@ -99,6 +101,7 @@ class User():
 
                 running_loss += loss.item()
             print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
+        self.model = student
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
@@ -148,9 +151,9 @@ class User():
             sender.remove_data(cluster=cluster, percentage_amount=percentage_amount, add_to_kd_dataset=True)
         else:
             # Sender removes some samples
-            samples = sender.remove_data(cluster, percentage_amount)
+            samples, clusters = sender.remove_data(cluster, percentage_amount)
             # Receiver adds those samples
-            receiver.add_data(samples)
+            receiver.add_data(samples, clusters)
 
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
@@ -184,24 +187,28 @@ class User():
             # Store the current status of the devices
             current_datasets = []
             current_kd_datasets = []
+            current_dataset_clusters = []
+            current_kd_dataset_clusters = []
             for device in self.devices:
                 current_datasets.append(device.dataset)
                 current_kd_datasets.append(device.kd_dataset)
+                current_dataset_clusters.append(device.dataset_clusters)
+                current_kd_dataset_clusters.append(device.kd_dataset_clusters)
                 # Reset the number of transferred samples for each device
                 device.num_transferred_samples = 0
             
-            print("Starting to shuffle")
             # Transfer the data according to the matrices
             self.shuffle_data(transfer_matrices)
             # Compute the resulting system latencies and data imbalances
-            print("Computing latencies and imbalances")
             latencies = self.get_latencies(epochs=1)
             data_imbalances = self.get_data_imbalances()
-            print(f"Latencies: {latencies}, Data imbalances: {data_imbalances}")
+            print(f"Result - Latencies: {latencies}, Data imbalances: {data_imbalances}")
             # Restore the original state of the devices
             for device_idx, device in enumerate(self.devices):
                 device.dataset = current_datasets[device_idx]
                 device.kd_dataset = current_kd_datasets[device_idx]
+                device.dataset_clusters = current_dataset_clusters[device_idx]
+        
             # Compute the loss function
             # The factor of 10 was introduced to increase by an order of magnitude the importance of the time std
             # Time std is usually very small and the max time is usually very large
@@ -258,7 +265,7 @@ class User():
                           options={'maxiter': 50, 'ftol': 1e-03})
         # Update the transition matrices
         self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
-        print(f"Result of optimization: {self.transition_matrices}")
+        print(f"Final result of optimization:\n {self.transition_matrices}")
     
     
     # Compute the difference in capability of the user compared to last round
@@ -288,6 +295,7 @@ class User():
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
-        self.kd_dataset = np.array([])
+        kd_dataset = []
         for device in self.devices:
-            self.kd_dataset = np.concatenate((self.kd_dataset, device.kd_dataset), axis=0)
+            kd_dataset.extend(device.kd_dataset)
+        self.kd_dataset = kd_dataset

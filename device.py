@@ -19,7 +19,8 @@ class Device():
         self.valset = valset
         self.model = None
 
-        self.datset_clusters = [None] * len(self.dataset) # For each sample, the cluster that the sample belongs to
+        self.dataset_clusters = np.zeros(shape=len(self.dataset), dtype=int) # For each sample, the cluster that the sample belongs to
+        self.kd_dataset_clusters = np.array([], dtype=int)
 
         self.num_transferred_samples = 0
 
@@ -38,9 +39,8 @@ class Device():
         dataset = np.array(self.dataset)
         for sample in dataset:
             distribution[sample["label"]] += 1
-        print(distribution)
         # Equation 3 from ShuffleFL
-        js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution), base=2) ** 2
+        js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution)) ** 2
         return js_divergence
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
@@ -72,59 +72,62 @@ class Device():
             epoch_acc = correct / total
             if verbose:
                 print(f"Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
+        self.model = net
 
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it
     def remove_data(self, cluster, percentage_amount, add_to_kd_dataset=False):
         samples = np.array([])
-        amount = math.floor(percentage_amount * len(self.dataset)) # Ensure that the amount is an integer
-        removed = False
-        truncated_dataset = np.array(self.dataset)
-        for i in range(amount):
-            for idx, c in enumerate(self.datset_clusters):
+        clusters = np.array([])
+        dataset = np.array(self.dataset)
+        dataset_clusters = np.array(self.dataset_clusters)
+        amount = math.floor(percentage_amount * len(dataset)) # Ensure that the amount is an integer
+        for _ in range(amount):
+            for idx, c in enumerate(self.dataset_clusters):
                 if c == cluster:
                     # Add the sample to the list of samples to be sent if it matches the cluster
-                    samples = np.append(samples, [self.dataset[idx]], axis=0)
+                    samples = np.append(samples, [dataset[idx]], axis=0)
+                    dataset = np.delete(dataset, idx, axis=0)
                     # Remove the sample from the dataset and the dataset clusters
-                    self.datset_clusters = np.delete(self.datset_clusters, idx, axis=0)
-                    truncated_dataset = np.delete(truncated_dataset, idx, axis=0)
-                    removed = True
+                    clusters = np.append(clusters, c)
+                    dataset_clusters = np.delete(dataset_clusters, idx, axis=0)
                     break
-            if not removed:
-                print(f"Warning! Not enough samples. Could only remove {i} out of required {amount} samples of cluster {cluster} from the dataset.")
-            removed = False
+        
         # Update the dataset
-        self.dataset = datasets.Dataset.from_list(truncated_dataset.tolist())
+        self.dataset = datasets.Dataset.from_list(dataset.tolist())
+        self.dataset_clusters = dataset_clusters.tolist()
+
         samples = samples.tolist()
+        # Check if the amount of samples removed is equal to the amount requested
+        if len(samples) != amount:
+            print(f"Amount of samples removed: {len(samples)}, Amount requested: {amount}")
         # If the data is to be added to the knowledge distillation dataset, do so
         # And return immediately
         if add_to_kd_dataset:
             self.kd_dataset.extend(samples)
-            return samples
+            self.kd_dataset_clusters = np.append(self.kd_dataset_clusters, clusters, axis=0)
+            return
 
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount
-
-        return samples
+        return samples, clusters
 
     # Used in the transfer function to receive data from a different device
-    def add_data(self, samples):
+    def add_data(self, samples, clusters):
+        assert(len(samples) == len(clusters))
         dataset = np.array(self.dataset)
         dataset = np.append(dataset, samples, axis=0)
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
-
+        self.dataset_clusters = np.append(self.dataset_clusters, clusters, axis=0)
+        assert(len(self.dataset) == len(self.dataset_clusters))
 
 
     # Assing each datapoint to a cluster
     def cluster_data(self, shrinkage_ratio):
         # Use t-SNE to embed the dataset into 2D space
         # Aggregate only the features, not the labels
-        start = time.time()
         feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
         feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
-        checkpoint = time.time()
-        print(f"t-SNE took {checkpoint - start} seconds")
         # Cluster datapoints to k classes using KMeans
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
-        self.datset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
-        print(f"KMeans took {time.time() - checkpoint} seconds")
+        self.dataset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
