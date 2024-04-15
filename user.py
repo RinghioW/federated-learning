@@ -7,6 +7,7 @@ import math
 import random
 import torchvision
 import datasets
+from adaptivenet import AdaptiveNet
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
@@ -20,7 +21,9 @@ class User():
         # Also used by equation 7 as the optimization variable for the argmin
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        self.transition_matrices = [np.full(shape=(math.floor(classes*self.shrinkage_ratio), len(devices)), fill_value=0.1, dtype=float)] * len(devices)
+        initial_transition_matrices = np.random.rand(len(devices), math.floor(classes*self.shrinkage_ratio), len(devices))
+        sums = np.sum(initial_transition_matrices, axis=2)
+        self.transition_matrices = initial_transition_matrices / sums[:, :, np.newaxis]
         
         # System latencies for each device
         self.adaptive_scaling_factor = 1.0
@@ -42,9 +45,13 @@ class User():
         for device in self.devices:
             # Adaptation is based on the device resources
             if device.config["compute"] < 5:
-                device.model = models.quantization.mobilenet_v2()
+                device.model = AdaptiveNet(quantization_factor=0.8)
+            elif device.config["compute"] < 10:
+                device.model = AdaptiveNet(quantization_factor=0.5)
+            elif device.config["compute"] < 20:
+                device.model = AdaptiveNet(quantization_factor=0.3)
             else:
-                device.model = models.mobilenet_v3_small()
+                device.model = AdaptiveNet(quantization_factor=0.)
     
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
@@ -54,7 +61,7 @@ class User():
         to_tensor = torchvision.transforms.ToTensor()
         kd_dataset = datasets.Dataset.from_list(self.kd_dataset)
         kd_dataset = kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, batch_size=32, num_workers=3)
+        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, num_workers=3, drop_last=True)
         ce_loss = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -163,7 +170,6 @@ class User():
             for cluster_idx in range(len(transition_matrix)):
                 for other_device_idx in range(len(transition_matrix[0])):
                         # Send data from cluster i to device j
-                        print(f"Sending data from device {device_idx} to device {other_device_idx} in cluster {cluster_idx}")
                         self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
 
     # Function to implement the dimensionality reduction of the transition matrices
@@ -235,17 +241,19 @@ class User():
                 row_sums.extend(1. - row_sum)
             return row_sums
         
-        # Constraint to make sure that at least some elements are used for the kd dataset
-        def non_zero_self_column(variables, num_devices, num_clusters):
+        def sum_rows_minus_one(variables, num_devices, num_clusters):
             # Reshape the flat variables back to the transition matrices shape
             transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
-            self_column = np.array([])
-            for i, matrix in enumerate(transition_matrices):
-                # Extract the column of the matrix that corresponds to the same device
-                self_column = np.append(self_column, [row[i] for row in matrix])
-            # Subtract a small value to ensure the column is non-zero
-            self_column = self_column.flatten()
-            return np.subtract(self_column, 10 ** -3)
+
+            # Calculate the row sums ford each matrix and ensure they sum to 1
+            # Because each row is the distribution of the data of a class for a device
+            row_sums = []
+            for matrix in transition_matrices:
+                # Compute Sum(row)
+                row_sum = np.sum(matrix, axis=1)
+                # Now compute [1 - Sum(row)]
+                row_sums.extend(row_sum - 1.)
+            return row_sums
         
         num_devices = len(self.devices)
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
@@ -253,8 +261,8 @@ class User():
         # Each element in the matrix is a probability, so it must be between 0 and 1
         bounds = [(0.,1.)] * num_variables
         # If the sum is less than one, we can use same-device column as additional dataset
-        constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)},
-                       {'type': 'ineq', 'fun': lambda variables: non_zero_self_column(variables, num_devices, num_clusters)},]
+        # constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
+        constraints = [{'type': 'eq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
         
         # Run the optimization
         current_transition_matrices = np.array(self.transition_matrices).flatten()
@@ -262,7 +270,7 @@ class User():
                           x0=current_transition_matrices,
                           method='SLSQP', bounds=bounds,
                           constraints=constraints,
-                          options={'maxiter': 50, 'ftol': 1e-03})
+                          options={'maxiter': 50, 'ftol': 1e-01, 'eps': 1e-01})
         # Update the transition matrices
         self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
         print(f"Final result of optimization:\n {self.transition_matrices}")

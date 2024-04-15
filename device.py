@@ -82,8 +82,9 @@ class Device():
         dataset = np.array(self.dataset)
         dataset_clusters = np.array(self.dataset_clusters)
         amount = math.floor(percentage_amount * len(dataset)) # Ensure that the amount is an integer
+        assert len(dataset) == len(dataset_clusters)
         for _ in range(amount):
-            for idx, c in enumerate(self.dataset_clusters):
+            for idx, c in enumerate(dataset_clusters):
                 if c == cluster:
                     # Add the sample to the list of samples to be sent if it matches the cluster
                     samples = np.append(samples, [dataset[idx]], axis=0)
@@ -93,20 +94,20 @@ class Device():
                     dataset_clusters = np.delete(dataset_clusters, idx, axis=0)
                     break
         
-        # Update the dataset
-        self.dataset = datasets.Dataset.from_list(dataset.tolist())
-        self.dataset_clusters = dataset_clusters.tolist()
-
         samples = samples.tolist()
+
         # Check if the amount of samples removed is equal to the amount requested
         if len(samples) != amount:
-            print(f"Amount of samples removed: {len(samples)}, Amount requested: {amount}")
+            print(f"Warning! Amount of samples removed: {len(samples)}, Amount requested: {amount}")
         # If the data is to be added to the knowledge distillation dataset, do so
         # And return immediately
         if add_to_kd_dataset:
             self.kd_dataset.extend(samples)
             self.kd_dataset_clusters = np.append(self.kd_dataset_clusters, clusters, axis=0)
             return
+        # Update the dataset
+        self.dataset = datasets.Dataset.from_list(dataset.tolist())
+        self.dataset_clusters = dataset_clusters.tolist()
 
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount

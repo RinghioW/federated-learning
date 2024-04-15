@@ -8,8 +8,8 @@ from server import Server
 def main():
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
-    parser.add_argument("-u", "--users", dest="users", type=int, default=3, help="Total number of users (default: 3)")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=6, help="Total number of devices (default: 6)")
+    parser.add_argument("-u", "--users", dest="users", type=int, default=2, help="Total number of users (default: 2)")
+    parser.add_argument("-d", "--devices", dest="devices", type=int, default=4, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=2, help="Number of epochs (default: 2)")
     print(parser.description)
@@ -41,12 +41,14 @@ def main():
 
     # Create device configurations
     # TODO: Figure out how to characterize the devices in a way that makes sense
+    V = 1
+    C = 21
     configs = [{"id" : i,
-                "compute" : np.random.randint(1, 15),
-                "memory" : np.random.randint(1, 15),
-                "energy_budget" : np.random.randint(1,15),
-                "uplink_rate" : np.random.randint(1,15),
-                "downlink_rate" : np.random.randint(1,15)
+                "compute" : np.random.randint(V, C),
+                "memory" : np.random.randint(V, C),
+                "energy_budget" : np.random.randint(V,C),
+                "uplink_rate" : np.random.randint(V,C),
+                "downlink_rate" : np.random.randint(V,C)
                 } for i in range(num_devices)]
 
     print(f"Device configurations:\n {configs}")

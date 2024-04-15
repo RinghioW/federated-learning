@@ -11,9 +11,9 @@ class AdaptiveNet(nn.Module):
         self.conv1 = nn.Conv2d(3, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
-        prune.ln_structured(module=self.conv2, name="weight", amount=pruning_factor, n=2, dim=0)
+        self.conv2 = prune.ln_structured(module=self.conv2, name="weight", amount=pruning_factor, n=2, dim=0)
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        prune.ln_structured(module=self.fc1, name="weight", amount=pruning_factor, n=2, dim=0)
+        self.fc1 = prune.ln_structured(module=self.fc1, name="weight", amount=pruning_factor, n=2, dim=0)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
     
@@ -25,9 +25,3 @@ class AdaptiveNet(nn.Module):
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
         return x
-
-
-
-
-
-    
