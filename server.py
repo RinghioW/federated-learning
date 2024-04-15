@@ -4,10 +4,11 @@ from config import DEVICE
 import random
 import math
 import torchvision
+from adaptivenet import AdaptiveNet
 class Server():
     def __init__(self, dataset) -> None:
         if dataset == "cifar10":
-            self.model = models.mobilenet_v3_large()
+            self.model = AdaptiveNet()
         else:
             # TODO: Add more datasets
             # Femnist, Shakespeare
@@ -67,5 +68,6 @@ class Server():
     # Select users for the next round of training
     # TODO: Consider tier-based selection (TiFL) instead of random selection
     def select_users(self, users, split=0.5):
-        self.users = random.choices(users, k=math.floor(split*len(users)))
+        # self.users = random.choices(users, k=math.floor(split*len(users)))
+        self.users = users
         self.wall_clock_training_times = [1.] * len(self.users)

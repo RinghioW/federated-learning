@@ -13,14 +13,11 @@ class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
         self.dataset = dataset
-        # The knowledge distillation dataset is created by sending a fraction of the dataset to itself when optimizing the transmission matrix
-        self.kd_dataset = []
 
         self.valset = valset
         self.model = None
 
         self.dataset_clusters = np.zeros(shape=len(self.dataset), dtype=int) # For each sample, the cluster that the sample belongs to
-        self.kd_dataset_clusters = np.array([], dtype=int)
 
         self.num_transferred_samples = 0
 
@@ -99,12 +96,7 @@ class Device():
         # Check if the amount of samples removed is equal to the amount requested
         if len(samples) != amount:
             print(f"Warning! Amount of samples removed: {len(samples)}, Amount requested: {amount}")
-        # If the data is to be added to the knowledge distillation dataset, do so
-        # And return immediately
-        if add_to_kd_dataset:
-            self.kd_dataset.extend(samples)
-            self.kd_dataset_clusters = np.append(self.kd_dataset_clusters, clusters, axis=0)
-            return
+
         # Update the dataset
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
         self.dataset_clusters = dataset_clusters.tolist()

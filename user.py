@@ -153,14 +153,10 @@ class User():
         sender = self.devices[sender_idx]
         receiver = self.devices[receiver_idx]
 
-        # If the receiver is the same as the sender, add the samples to the kd_dataset
-        if sender_idx == receiver_idx:
-            sender.remove_data(cluster=cluster, percentage_amount=percentage_amount, add_to_kd_dataset=True)
-        else:
-            # Sender removes some samples
-            samples, clusters = sender.remove_data(cluster, percentage_amount)
-            # Receiver adds those samples
-            receiver.add_data(samples, clusters)
+        # Sender removes some samples
+        samples, clusters = sender.remove_data(cluster, percentage_amount)
+        # Receiver adds those samples
+        receiver.add_data(samples, clusters)
 
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
@@ -169,6 +165,7 @@ class User():
         for device_idx, transition_matrix in enumerate(transition_matrices):
             for cluster_idx in range(len(transition_matrix)):
                 for other_device_idx in range(len(transition_matrix[0])):
+                    if other_device_idx != device_idx:
                         # Send data from cluster i to device j
                         self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
 
@@ -192,14 +189,10 @@ class User():
 
             # Store the current status of the devices
             current_datasets = []
-            current_kd_datasets = []
             current_dataset_clusters = []
-            current_kd_dataset_clusters = []
             for device in self.devices:
                 current_datasets.append(device.dataset)
-                current_kd_datasets.append(device.kd_dataset)
                 current_dataset_clusters.append(device.dataset_clusters)
-                current_kd_dataset_clusters.append(device.kd_dataset_clusters)
                 # Reset the number of transferred samples for each device
                 device.num_transferred_samples = 0
             
@@ -212,7 +205,6 @@ class User():
             # Restore the original state of the devices
             for device_idx, device in enumerate(self.devices):
                 device.dataset = current_datasets[device_idx]
-                device.kd_dataset = current_kd_datasets[device_idx]
                 device.dataset_clusters = current_dataset_clusters[device_idx]
         
             # Compute the loss function
@@ -239,20 +231,6 @@ class User():
                 row_sum = np.sum(matrix, axis=1)
                 # Now compute [1 - Sum(row)]
                 row_sums.extend(1. - row_sum)
-            return row_sums
-        
-        def sum_rows_minus_one(variables, num_devices, num_clusters):
-            # Reshape the flat variables back to the transition matrices shape
-            transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
-
-            # Calculate the row sums ford each matrix and ensure they sum to 1
-            # Because each row is the distribution of the data of a class for a device
-            row_sums = []
-            for matrix in transition_matrices:
-                # Compute Sum(row)
-                row_sum = np.sum(matrix, axis=1)
-                # Now compute [1 - Sum(row)]
-                row_sums.extend(row_sum - 1.)
             return row_sums
         
         num_devices = len(self.devices)
@@ -305,5 +283,5 @@ class User():
         # The dataset is then used to train the user model
         kd_dataset = []
         for device in self.devices:
-            kd_dataset.extend(device.kd_dataset)
+            kd_dataset.extend(device.dataset)
         self.kd_dataset = kd_dataset
