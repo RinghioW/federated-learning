@@ -42,7 +42,7 @@ def main():
     # Create device configurations
     # TODO: Figure out how to characterize the devices in a way that makes sense
     V = 1
-    C = 21
+    C = 5
     configs = [{"id" : i,
                 "compute" : np.random.randint(V, C),
                 "memory" : np.random.randint(V, C),

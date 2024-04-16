@@ -45,13 +45,15 @@ class User():
         for device in self.devices:
             # Adaptation is based on the device resources
             if device.config["compute"] < 5:
-                device.model = AdaptiveNet(quantization_factor=0.8)
+                device.model = AdaptiveNet(pruning_factor=0.8, quantize=True)
+                device.model.qconfig = torch.quantization.default_qconfig
+                torch.quantization.prepare(device.model, inplace=True)
             elif device.config["compute"] < 10:
-                device.model = AdaptiveNet(quantization_factor=0.5)
+                device.model = AdaptiveNet(pruning_factor=0.5)
             elif device.config["compute"] < 20:
-                device.model = AdaptiveNet(quantization_factor=0.3)
+                device.model = AdaptiveNet(pruning_factor=0.3)
             else:
-                device.model = AdaptiveNet(quantization_factor=0.)
+                device.model = AdaptiveNet(pruning_factor=0.)
     
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
@@ -64,12 +66,13 @@ class User():
         train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, num_workers=3, drop_last=True)
         ce_loss = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
-
+        student.train() # Student to train mode
+        for teacher in teachers:
+            teacher.eval()  # Teacher set to evaluation mode
+            if teacher.quantize:
+                torch.quantization.convert(teacher, inplace=True)
+            print(teacher)
         for epoch in range(epochs):
-            for teacher in teachers:
-                teacher.eval()  # Teacher set to evaluation mode
-            student.train() # Student to train mode
-
             running_loss = 0.0
             for batch in train_loader:
                 inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
