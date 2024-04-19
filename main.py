@@ -4,12 +4,12 @@ import time
 from device import Device
 from user import User
 from server import Server
-
+from config import Style
 def main():
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
-    parser.add_argument("-u", "--users", dest="users", type=int, default=2, help="Total number of users (default: 2)")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=4, help="Total number of devices (default: 6)")
+    parser.add_argument("-u", "--users", dest="users", type=int, default=6, help="Total number of users (default: 2)")
+    parser.add_argument("-d", "--devices", dest="devices", type=int, default=24, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=2, help="Number of epochs (default: 2)")
     print(parser.description)
@@ -41,14 +41,16 @@ def main():
 
     # Create device configurations
     # TODO: Figure out how to characterize the devices in a way that makes sense
-    V = 1
-    C = 5
+    # The higher these numbers are, the higher the latency factor will be
+    # If the latency is really high, this means that SL >> DI,
+    # Meaning that data imbalance will not be accounted for
+    # And devices will not share data with each other
     configs = [{"id" : i,
-                "compute" : np.random.randint(V, C),
-                "memory" : np.random.randint(V, C),
-                "energy_budget" : np.random.randint(V,C),
-                "uplink_rate" : np.random.randint(V,C),
-                "downlink_rate" : np.random.randint(V,C)
+                "compute" : np.random.randint(10**6, 10**9), # Compute capability in FLOPS
+                "memory" : np.random.randint(10**6, 10**9), # Memory capability in Bytes
+                "energy_budget" : np.random.randint(10**5,10**7), # Energy budget in J/hour
+                "uplink_rate" : np.random.randint(10**6,10**9), # Uplink rate in Bps
+                "downlink_rate" : np.random.randint(10**6,10**9) # Downlink rate in Bps
                 } for i in range(num_devices)]
 
     print(f"Device configurations:\n {configs}")
@@ -62,15 +64,15 @@ def main():
     time_start = time.time()
     
     # Evaluate the server model before training
-    print("Evaluating server model before training...")
+    print(f"{Style.GREEN}Evaluating server model before training...{Style.RESET}")
     initial_loss, initial_accuracy = server.evaluate(testset)
-    print(f"Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}")
+    print(f"{Style.GREEN}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
 
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
     for epoch in range(server_epochs):
-        print(f"FL epoch {epoch+1}/{server_epochs}")
+        print(f"{Style.GREEN}FL epoch {epoch+1}/{server_epochs}{Style.RESET}")
 
         # Server performs selection of the users
         # ShuffleFL step 3

@@ -38,19 +38,24 @@ class User():
 
 
     # Adapt the model to the devices
-    # Uses quantization
-    # TODO : ditch quantization. Instead, use torch.nn.utils.prune and torch.pca_lowrank
+    # Implements the adaptation step from ShuffleFL Novelty
+    # Constructs a function s.t. device_model = f(user_model, device_resources, device_data_distribution)
     def adapt_model(self, model):
         self.model = model
         for device in self.devices:
+            # If compute is low, better to quantize the network
+            # If memory is low, better to prune the network
+            # If communication is low, does not really matter as to the network
+            # If energy is low, better to prune the network
+            resources = device.config["compute"] + device.config["memory"] + device.config["energy_budget"]
             # Adaptation is based on the device resources
-            if device.config["compute"] < 5:
+            if resources < 5:
                 device.model = AdaptiveNet(pruning_factor=0.8, quantize=True)
                 device.model.qconfig = torch.quantization.default_qconfig
                 torch.quantization.prepare(device.model, inplace=True)
-            elif device.config["compute"] < 10:
+            elif resources < 10:
                 device.model = AdaptiveNet(pruning_factor=0.5)
-            elif device.config["compute"] < 20:
+            elif resources < 20:
                 device.model = AdaptiveNet(pruning_factor=0.3)
             else:
                 device.model = AdaptiveNet(pruning_factor=0.)

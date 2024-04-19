@@ -8,7 +8,7 @@ from scipy.spatial.distance import jensenshannon
 import time
 import torchvision.transforms as transforms
 import datasets
-
+from config import Style
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
@@ -95,7 +95,7 @@ class Device():
 
         # Check if the amount of samples removed is equal to the amount requested
         if len(samples) != amount:
-            print(f"Warning! Amount of samples removed: {len(samples)}, Amount requested: {amount}")
+            print(f"{Style.RED}[Warning]{Style.RESET} Amount of samples removed: {len(samples)}, Amount requested: {amount}")
 
         # Update the dataset
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
@@ -119,8 +119,11 @@ class Device():
     def cluster_data(self, shrinkage_ratio):
         # Use t-SNE to embed the dataset into 2D space
         # Aggregate only the features, not the labels
+        perplexity = 20
+        if len(self.dataset) < perplexity:
+            perplexity = len(self.dataset)
         feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
-        feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
+        feature_space_2D = TSNE(n_components=2, perplexity=perplexity).fit_transform(feature_space)
         # Cluster datapoints to k classes using KMeans
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
         self.dataset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)

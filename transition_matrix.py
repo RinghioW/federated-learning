@@ -5,5 +5,3 @@ class TransitionMatrix:
         rand_matrix = np.random.rand(num_clusters, num_devices)
         sums = np.sum(rand_matrix, axis=1)
         self.matrix = rand_matrix / sums[:, :, np.newaxis]
-
-    
