@@ -12,6 +12,8 @@ def main():
     parser.add_argument("-d", "--devices", dest="devices", type=int, default=24, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=2, help="Number of epochs (default: 2)")
+    parser.add_argument("--shuffle", dest="shuffle", type=bool, default=True, help="Enable data shuffling")
+    parser.add_argument("--adapt", dest="adapt", type=bool, default=True, help="Enable model adaptation")
     print(parser.description)
 
     # Parse arguments
@@ -20,6 +22,8 @@ def main():
     num_devices = args.devices
     dataset = args.dataset
     server_epochs = args.epochs
+    shuffle = args.shuffle
+    adapt = args.adapt
 
     datasets = ["cifar10", "femnist", "shakespeare"]
     if dataset not in datasets:
@@ -86,41 +90,45 @@ def main():
         # ShuffleFL step 6
         for user_idx, user in enumerate(server.users):
             
-            # User adapts the model for their devices
-            # ShuffleFL Novelty
-            print(f"Adapting model for user {user_idx+1}/{len(users)}...")
-            user.adapt_model(server.model)
+            if adapt:
+                # User adapts the model for their devices
+                # ShuffleFL Novelty
+                print(f"Adapting model for user {user_idx+1}/{len(users)}...")
+                user.adapt_model(server.model)
 
-            # User measures the system latencies
-            latencies = user.get_latencies(epochs=on_device_epochs)
-            print(f"Pre-shuffling system latencies for user {user_idx+1}: {latencies}")
-
-            # User measures the data imbalance
-            data_imbalances = user.get_data_imbalances()
-            print(f"Pre-shuffling imbalance for user {user_idx+1}: {data_imbalances}")
             
-            # Reduce dimensionality of the transmission matrices
-            # ShuffleFL step 7, 8
-            print(f"Reducing feature space for user {user_idx+1}...")
-            user.reduce_dimensionality()
-            
-            # User optimizes the transmission matrices
-            # ShuffleFL step 9
-            print(f"Optimizing transition matrices for user {user_idx+1}...")
-            user.optimize_transmission_matrices()
+            if shuffle:
+                # User measures the system latencies
+                latencies = user.get_latencies(epochs=on_device_epochs)
+                print(f"Pre-shuffling system latencies for user {user_idx+1}: {latencies}")
 
-            # User shuffles the data
-            # ShuffleFL step 10
-            print(f"Shuffling data for user {user_idx+1}...")
-            user.shuffle_data(user.transition_matrices)
+                # User measures the data imbalance
+                data_imbalances = user.get_data_imbalances()
 
-            # User creates the knowledge distillation dataset
-            # ShuffleFL Novelty
-            print(f"Creating knowledge distillation dataset for user {user_idx+1}...")
-            user.create_kd_dataset()
+                print(f"Pre-shuffling imbalance for user {user_idx+1}: {data_imbalances}")
+                # Reduce dimensionality of the transmission matrices
+                # ShuffleFL step 7, 8
+                print(f"Reducing feature space for user {user_idx+1}...")
+                user.reduce_dimensionality()
+                
+                # User optimizes the transmission matrices
+                # ShuffleFL step 9
+                print(f"Optimizing transition matrices for user {user_idx+1}...")
+                user.optimize_transmission_matrices()
 
-            # User updates parameters based on last iteration
-            user.update_average_capability()
+                # User shuffles the data
+                # ShuffleFL step 10
+                print(f"Shuffling data for user {user_idx+1}...")
+                user.shuffle_data(user.transition_matrices)
+
+            if adapt:
+                # User creates the knowledge distillation dataset
+                # ShuffleFL Novelty
+                print(f"Creating knowledge distillation dataset for user {user_idx+1}...")
+                user.create_kd_dataset()
+
+                # User updates parameters based on last iteration
+                user.update_average_capability()
 
             # User measures the system latencies
             latencies = user.get_latencies(epochs=on_device_epochs)
@@ -134,10 +142,11 @@ def main():
             # ShuffleFL step 11-15
             user.train_devices(epochs=on_device_epochs, verbose=True)
 
-            # User trains the model using knowledge distillation
-            # ShuffleFL step 16, 17
-            print(f"Aggregating updates from user {user_idx+1}...")
-            user.aggregate_updates()
+            if adapt:
+                # User trains the model using knowledge distillation
+                # ShuffleFL step 16, 17
+                print(f"Aggregating updates from user {user_idx+1}...")
+                user.aggregate_updates()
 
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19

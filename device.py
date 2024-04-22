@@ -95,7 +95,7 @@ class Device():
 
         # Check if the amount of samples removed is equal to the amount requested
         if len(samples) != amount:
-            print(f"{Style.RED}[Warning]{Style.RESET} Amount of samples removed: {len(samples)}, Amount requested: {amount}")
+            print(f"{Style.YELLOW}[Warning]{Style.RESET} Amount of samples removed: {len(samples)}, Amount requested: {amount}")
 
         # Update the dataset
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
