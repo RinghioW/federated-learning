@@ -5,15 +5,16 @@ from device import Device
 from user import User
 from server import Server
 from config import Style
+import matplotlib.pyplot as plt
 def main():
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
-    parser.add_argument("-u", "--users", dest="users", type=int, default=6, help="Total number of users (default: 2)")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=24, help="Total number of devices (default: 6)")
+    parser.add_argument("-u", "--users", dest="users", type=int, default=2, help="Total number of users (default: 2)")
+    parser.add_argument("-d", "--devices", dest="devices", type=int, default=6, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=2, help="Number of epochs (default: 2)")
-    parser.add_argument("--shuffle", dest="shuffle", type=bool, default=True, help="Enable data shuffling")
-    parser.add_argument("--adapt", dest="adapt", type=bool, default=True, help="Enable model adaptation")
+    parser.add_argument("--no-shuffle", dest="shuffle", type=bool, default=False, help="Enable data shuffling")
+    parser.add_argument("--no-adapt", dest="adapt", type=bool, default=False, help="Enable model adaptation")
     print(parser.description)
 
     # Parse arguments
@@ -22,8 +23,8 @@ def main():
     num_devices = args.devices
     dataset = args.dataset
     server_epochs = args.epochs
-    shuffle = args.shuffle
-    adapt = args.adapt
+    shuffle = not args.shuffle
+    adapt = not args.adapt
 
     datasets = ["cifar10", "femnist", "shakespeare"]
     if dataset not in datasets:
@@ -71,6 +72,9 @@ def main():
     print(f"{Style.GREEN}Evaluating server model before training...{Style.RESET}")
     initial_loss, initial_accuracy = server.evaluate(testset)
     print(f"{Style.GREEN}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
+    total_time = 0.0
+    latency_history = []
+    data_imbalance_history = []
 
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
@@ -132,10 +136,13 @@ def main():
 
             # User measures the system latencies
             latencies = user.get_latencies(epochs=on_device_epochs)
+            total_time += sum(latencies)
+            latency_history.append(sum(latencies))
             print(f"System latencies for user {user_idx+1}: {latencies}")
 
             # User measures the data imbalance
             data_imbalances = user.get_data_imbalances()
+            data_imbalance_history.append(sum(data_imbalances))
             print(f"Data imbalance for user {user_idx+1}: {data_imbalances}")
 
             # User trains devices
@@ -157,6 +164,18 @@ def main():
         print(f"Evaluating trained server model...")
         loss, accuracy = server.evaluate(testset)
         print(f"Final Loss: {loss}, Final Accuracy: {accuracy}")
+        # Plot latency and data imbalance history
+    plt.plot(latency_history)
+    plt.title("System Latency History")
+    plt.xlabel("Epoch")
+    plt.ylabel("Latency")
+    plt.show()
+
+    plt.plot(data_imbalance_history)
+    plt.title("Data Imbalance History")
+    plt.xlabel("Epoch")
+    plt.ylabel("Imbalance")
+    plt.show()
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")

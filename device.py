@@ -17,7 +17,7 @@ class Device():
         self.valset = valset
         self.model = None
 
-        self.dataset_clusters = np.zeros(shape=len(self.dataset), dtype=int) # For each sample, the cluster that the sample belongs to
+        self.dataset_clusters = None # For each sample, the cluster that the sample belongs to
 
         self.num_transferred_samples = 0
 
@@ -68,18 +68,19 @@ class Device():
             epoch_loss /= len(trainloader.dataset)
             epoch_acc = correct / total
             if verbose:
-                print(f"Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
+                print(f"Device: {self.config['id']} Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
         self.model = net
 
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it
-    def remove_data(self, cluster, percentage_amount, add_to_kd_dataset=False):
+    def remove_data(self, cluster, percentage_amount):
         samples = np.array([])
-        clusters = np.array([])
+        clusters = np.array([], dtype=int)
         dataset = np.array(self.dataset)
-        dataset_clusters = np.array(self.dataset_clusters)
-        amount = math.floor(percentage_amount * len(dataset)) # Ensure that the amount is an integer
-        assert len(dataset) == len(dataset_clusters)
+        dataset_clusters = self.dataset_clusters
+        num_cluster_samples = len([c for c in dataset_clusters if c == cluster])
+        amount = math.floor(percentage_amount * num_cluster_samples) # Ensure that the amount is an integer
+        assert len(dataset) == len(dataset_clusters), f"Dataset length: {len(dataset)}, Dataset clusters length: {len(dataset_clusters)}"
         for _ in range(amount):
             for idx, c in enumerate(dataset_clusters):
                 if c == cluster:
@@ -95,12 +96,14 @@ class Device():
 
         # Check if the amount of samples removed is equal to the amount requested
         if len(samples) != amount:
-            print(f"{Style.YELLOW}[Warning]{Style.RESET} Amount of samples removed: {len(samples)}, Amount requested: {amount}")
+            print(f"{Style.YELLOW}[Device {self.config['id']} Warning]{Style.RESET} Cluster: {cluster}. Amount of samples removed: {len(samples)}, Amount requested: {amount}")
+            print(f"Dataset\n{self.dataset}")
+            print(f"Clusters\n{self.dataset_clusters}")
+            print(f"Number of cluster samples in the original dataset_clusters: {len([c for c in self.dataset_clusters if c == cluster])}")
 
         # Update the dataset
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
-        self.dataset_clusters = dataset_clusters.tolist()
-
+        self.dataset_clusters = dataset_clusters
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount
         return samples, clusters
