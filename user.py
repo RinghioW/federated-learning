@@ -62,7 +62,7 @@ class User():
                 device.model = AdaptiveNet(pruning_factor=0.)
     
     # Train the user model using knowledge distillation
-    def aggregate_updates(self, learning_rate=0.001, epochs=3, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
+    def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
         # TODO : Train in parallel, not sequentially (?)
         teachers = [device.model for device in self.devices]
@@ -73,11 +73,6 @@ class User():
         ce_loss = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
         student.train() # Student to train mode
-        for teacher in teachers:
-            teacher.eval()  # Teacher set to evaluation mode
-            if teacher.quantize:
-                torch.quantization.convert(teacher, inplace=True)
-            print(teacher)
         for epoch in range(epochs):
             running_loss = 0.0
             for batch in train_loader:
@@ -90,6 +85,9 @@ class User():
                     # Keep the teacher logits for the soft targets
                     teacher_logits = []
                     for teacher in teachers:
+                        teacher.eval()  # Teacher set to evaluation mode
+                        if teacher.quantize:
+                            teacher = torch.quantization.convert(teacher)
                         logits = teacher(inputs)
                         teacher_logits.append(logits)
 
@@ -272,7 +270,6 @@ class User():
             # Time std is usually very small and the max time is usually very large
             # But a better approach would be to normalize the values or take the square of the std
             obj_func = STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_scaling_factor*np.max(data_imbalances)
-            print(f"Current objective function value: {obj_func}")
             return obj_func
 
         # Define the constraints for the optimization
@@ -303,12 +300,9 @@ class User():
                           constraints=constraints,
                           options={'maxiter': 50, 'ftol': 1e-01, 'eps': 1e-01})
         # Update the transition matrices
-        self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
         if not result.success:
             print(f"{Style.RED}[ERROR]{Style.RESET} Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
-        else:
-            print(f"{Style.GREEN}[OK]{Style.RESET} Final result of optimization:\n {self.transition_matrices}, function value {result.fun}")
-        
+        self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
     
     
     # Compute the difference in capability of the user compared to last round

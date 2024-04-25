@@ -13,7 +13,7 @@ def main():
     parser.add_argument("-u", "--users", dest="users", type=int, default=2, help="Total number of users (default: 2)")
     parser.add_argument("-d", "--devices", dest="devices", type=int, default=6, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
-    parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=2, help="Number of epochs (default: 2)")
+    parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs (default: 2)")
     parser.add_argument("--no-shuffle", dest="shuffle", type=bool, default=False, help="Enable data shuffling")
     parser.add_argument("--no-adapt", dest="adapt", type=bool, default=False, help="Enable model adaptation")
     print(parser.description)
@@ -43,7 +43,7 @@ def main():
         trainsets, valsets, testset = load_datasets(num_devices)
 
     # Number of epochs that each device will train for
-    on_device_epochs = 3
+    on_device_epochs = 10
 
     # Create device configurations
     # TODO: Figure out how to characterize the devices in a way that makes sense
@@ -70,9 +70,9 @@ def main():
     time_start = time.time()
     
     # Evaluate the server model before training
-    print(f"{Style.GREEN}Evaluating server model before training...{Style.RESET}")
+    print(f"{Style.YELLOW}Evaluating server model before training...{Style.RESET}")
     initial_loss, initial_accuracy = server.evaluate(testset)
-    print(f"{Style.GREEN}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
+    print(f"{Style.YELLOW}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
     total_time = 0.0
     user_latency_history = [[] for _ in range(num_users)]
     user_data_imbalance_history = [[] for _ in range(num_users)]
@@ -82,7 +82,7 @@ def main():
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
     for epoch in range(server_epochs):
-        print(f"{Style.GREEN}FL epoch {epoch+1}/{server_epochs}{Style.RESET}")
+        print(f"{Style.YELLOW}FL epoch {epoch+1}/{server_epochs}{Style.RESET}")
 
         # Server performs selection of the users
         # ShuffleFL step 3
@@ -166,27 +166,27 @@ def main():
         plt.title(f"Latency History for User {user_idx+1}")
         plt.xlabel("Epoch")
         plt.ylabel("Latency")
-        plt.show(block=False)
+        plt.show()
         # Plot data imbalance history
         plt.plot(user_data_imbalance_history[user_idx])
         plt.title(f"Data Imbalance History for User {user_idx+1}")
         plt.xlabel("Epoch")
         plt.ylabel("Imbalance")
-        plt.show(block=False)
+        plt.show()
 
     # Plot loss history
     plt.plot(losses)
     plt.title("Loss History")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.show(block=False)
+    plt.show()
 
     # Plot accuracy history
     plt.plot(accuracies)
     plt.title("Accuracy History")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
-    plt.show(block=True)
+    plt.show()
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")

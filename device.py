@@ -40,16 +40,19 @@ class Device():
         js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution)) ** 2
         return js_divergence
     
+    # Compute the JS divergence between the reference balanced distribution and the actual data distribution
+    # In the mock version, only the clusters are used to compute the distribution
     def mock_data_imbalance(self):
-        reference_distribution = [len(self.dataset_clusters)/NUM_CLASSES] * NUM_CLASSES
-        distribution = [0] * NUM_CLASSES
+        NUM_CLUSTERS = 3
+        reference_distribution = [len(self.dataset_clusters)/NUM_CLUSTERS] * NUM_CLUSTERS
+        distribution = [0] * NUM_CLUSTERS
         for cluster in self.dataset_clusters:
             distribution[cluster] += 1
         js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution)) ** 2
         return js_divergence
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
-    def train(self, epochs=5, verbose=True):
+    def train(self, epochs=10, verbose=False):
         if self.model is None or self.dataset is None:
             raise ValueError("Model or dataset is None.")
         net = self.model
@@ -127,13 +130,6 @@ class Device():
                     break
         
         samples = samples.tolist()
-
-        # Check if the amount of samples removed is equal to the amount requested
-        if len(samples) != amount:
-            print(f"{Style.YELLOW}[Device {self.config['id']} Warning]{Style.RESET} Cluster: {cluster}. Amount of samples removed: {len(samples)}, Amount requested: {amount}")
-            print(f"Dataset\n{self.dataset}")
-            print(f"Clusters\n{self.dataset_clusters}")
-            print(f"Number of cluster samples in the original dataset_clusters: {len([c for c in self.dataset_clusters if c == cluster])}")
 
         # Update the dataset
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
