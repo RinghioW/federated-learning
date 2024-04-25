@@ -74,9 +74,10 @@ def main():
     initial_loss, initial_accuracy = server.evaluate(testset)
     print(f"{Style.GREEN}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
     total_time = 0.0
-    latency_history = []
-    data_imbalance_history = []
-
+    user_latency_history = [[] for _ in range(num_users)]
+    user_data_imbalance_history = [[] for _ in range(num_users)]
+    losses = []
+    accuracies = []
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
@@ -98,38 +99,31 @@ def main():
             if adapt:
                 # User adapts the model for their devices
                 # ShuffleFL Novelty
-                print(f"Adapting model for user {user_idx+1}/{len(users)}...")
                 user.adapt_model(server.model)
 
             
             if shuffle:
                 # User measures the system latencies
                 latencies = user.get_latencies(epochs=on_device_epochs)
-                print(f"Pre-shuffling system latencies for user {user_idx+1}: {latencies}")
 
                 # User measures the data imbalance
                 data_imbalances = user.get_data_imbalances()
 
-                print(f"Pre-shuffling imbalance for user {user_idx+1}: {data_imbalances}")
                 # Reduce dimensionality of the transmission matrices
                 # ShuffleFL step 7, 8
-                print(f"Reducing feature space for user {user_idx+1}...")
                 user.reduce_dimensionality()
                 
                 # User optimizes the transmission matrices
                 # ShuffleFL step 9
-                print(f"Optimizing transition matrices for user {user_idx+1}...")
                 user.optimize_transmission_matrices()
 
                 # User shuffles the data
                 # ShuffleFL step 10
-                print(f"Shuffling data for user {user_idx+1}...")
                 user.shuffle_data(user.transition_matrices)
 
             if adapt:
                 # User creates the knowledge distillation dataset
                 # ShuffleFL Novelty
-                print(f"Creating knowledge distillation dataset for user {user_idx+1}...")
                 user.create_kd_dataset()
 
                 # User updates parameters based on last iteration
@@ -138,13 +132,11 @@ def main():
             # User measures the system latencies
             latencies = user.get_latencies(epochs=on_device_epochs)
             total_time += sum(latencies)
-            latency_history.append(max(latencies))
-            print(f"System latencies for user {user_idx+1}: {latencies}")
+            user_latency_history[user_idx].append(max(latencies))
 
             # User measures the data imbalance
             data_imbalances = user.get_data_imbalances()
-            data_imbalance_history.append(max(data_imbalances))
-            print(f"Data imbalance for user {user_idx+1}: {data_imbalances}")
+            user_data_imbalance_history[user_idx].append(max(data_imbalances))
 
             # User trains devices
             # ShuffleFL step 11-15
@@ -164,19 +156,37 @@ def main():
         # Server evaluates the model
         print(f"Evaluating trained server model...")
         loss, accuracy = server.evaluate(testset)
-        print(f"Final Loss: {loss}, Final Accuracy: {accuracy}")
-        # Plot latency and data imbalance history
-    plt.plot(latency_history)
-    plt.title("System Latency History")
-    plt.xlabel("Epoch")
-    plt.ylabel("Latency")
-    plt.show()
+        losses.append(loss)
+        accuracies.append(accuracy)
+    
+    # Plot latency and data imbalance history
+    for user_idx in range(num_users):
+        # Plot latency history
+        plt.plot(user_latency_history[user_idx])
+        plt.title(f"Latency History for User {user_idx+1}")
+        plt.xlabel("Epoch")
+        plt.ylabel("Latency")
+        plt.show(block=False)
+        # Plot data imbalance history
+        plt.plot(user_data_imbalance_history[user_idx])
+        plt.title(f"Data Imbalance History for User {user_idx+1}")
+        plt.xlabel("Epoch")
+        plt.ylabel("Imbalance")
+        plt.show(block=False)
 
-    plt.plot(data_imbalance_history)
-    plt.title("Data Imbalance History")
+    # Plot loss history
+    plt.plot(losses)
+    plt.title("Loss History")
     plt.xlabel("Epoch")
-    plt.ylabel("Imbalance")
-    plt.show()
+    plt.ylabel("Loss")
+    plt.show(block=False)
+
+    # Plot accuracy history
+    plt.plot(accuracies)
+    plt.title("Accuracy History")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.show(block=True)
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")
