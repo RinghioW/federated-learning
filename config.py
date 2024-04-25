@@ -1,7 +1,7 @@
 import torch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 10
-STD_CORRECTION = 10 ** 9
+STD_CORRECTION = 10
 
 class Style():
   RED = '\033[31m'

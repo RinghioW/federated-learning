@@ -8,6 +8,7 @@ import random
 import torchvision
 import datasets
 from adaptivenet import AdaptiveNet
+from config import Style
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
@@ -50,7 +51,7 @@ class User():
             resources = device.config["compute"] + device.config["memory"] + device.config["energy_budget"]
             # Adaptation is based on the device resources
             if resources < 5:
-                device.model = AdaptiveNet(pruning_factor=0.8, quantize=True)
+                device.model = AdaptiveNet(quantize=True)
                 device.model.qconfig = torch.quantization.default_qconfig
                 torch.quantization.prepare(device.model, inplace=True)
             elif resources < 10:
@@ -165,6 +166,67 @@ class User():
         samples, clusters = sender.remove_data(cluster, percentage_amount)
         # Receiver adds those samples
         receiver.add_data(samples, clusters)
+    
+    def mock_send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
+        # Identify sender and receiver
+        sender = self.devices[sender_idx]
+        receiver = self.devices[receiver_idx]
+
+        # Sender removes some samples
+        clusters = sender.mock_remove_data(cluster, percentage_amount)
+        # Receiver adds those samples
+        receiver.mock_add_data(clusters)
+
+    def mock_get_data_imbalances(self):
+        data_imbalances = []
+        for device in self.devices:
+            data_imbalances.append(device.mock_data_imbalance())
+        return data_imbalances
+    
+    def mock_get_latencies(self, transition_matrices):
+        t_communication = [0.] * len(self.devices)
+        t_computation = [0.] * len(self.devices)
+        latencies = [0.] * len(self.devices)
+        
+        # For each device, compute communication and computation time
+        for device_idx, device in enumerate(self.devices):
+            transition_matrix = transition_matrices[device_idx]
+            # Compute the communication time
+            for data_class_idx, _ in enumerate(transition_matrix):
+                for other_device_idx, other_device in enumerate(self.devices):
+                    other_transition_matrix = transition_matrices[other_device_idx]
+                    if device_idx != other_device_idx:
+                        # Transmitting
+                        num_transmitted_samples = len(device.dataset_clusters) * transition_matrix[data_class_idx][other_device_idx]
+                        t_communication[device_idx] += num_transmitted_samples * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
+                        # Receiving
+                        num_received_samples = len(other_device.dataset_clusters) * other_transition_matrix[data_class_idx][device_idx]
+                        t_communication[device_idx] += num_received_samples * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
+            # Compute the computation time
+            t_computation[device_idx] += 3 * len(device.dataset_clusters) * device.config["compute"]
+            
+            # Compute the latency as the sum of both
+            latencies[device_idx] = t_communication[device_idx] + t_computation[device_idx]
+        return latencies
+    
+
+
+    # Mock function to shuffle data between devices
+    # Only use the dataset_clusters to simulate the data shuffling
+    # Does not actually send the data
+    def mock_shuffle_data(self, transition_matrices):
+        for device_idx, transition_matrix in enumerate(transition_matrices):
+            for cluster_idx in range(len(transition_matrix)):
+                for other_device_idx in range(len(transition_matrix[0])):
+                    if other_device_idx != device_idx:
+                        # Send data from cluster i to device j
+                        self.mock_send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
+
+        # Compute the latencies
+        latencies = self.mock_get_latencies(transition_matrices)
+        # Compute the data imbalances
+        data_imbalances = self.mock_get_data_imbalances()
+        return latencies, data_imbalances
 
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
@@ -193,33 +255,25 @@ class User():
         def objective_function(x):
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
-            print(f"Current transfer matrices:\n {transfer_matrices}")
-
-            # Store the current status of the devices
-            current_datasets = []
-            current_dataset_clusters = []
-            for device in self.devices:
-                current_datasets.append(device.dataset)
-                current_dataset_clusters.append(device.dataset_clusters)
-                # Reset the number of transferred samples for each device
-                device.num_transferred_samples = 0
             
-            # Transfer the data according to the matrices
-            self.shuffle_data(transfer_matrices)
-            # Compute the resulting system latencies and data imbalances
-            latencies = self.get_latencies(epochs=1)
-            data_imbalances = self.get_data_imbalances()
-            print(f"Result - Latencies: {latencies}, Data imbalances: {data_imbalances}")
-            # Restore the original state of the devices
-            for device_idx, device in enumerate(self.devices):
-                device.dataset = current_datasets[device_idx]
-                device.dataset_clusters = current_dataset_clusters[device_idx]
-        
+            # Save the state of the clusters of each device
+            devices_dataset_clusters = [device.dataset_clusters for device in self.devices]
+                
+            # Simulate the transferring of the data according to the matrices
+            latencies, data_imbalances = self.mock_shuffle_data(transfer_matrices)
+
+            # Restore the state of the clusters of each device
+            for idx, device in enumerate(self.devices):
+                device.dataset_clusters = devices_dataset_clusters[idx]
+                device.num_transferred_samples = 0
+
             # Compute the loss function
-            # The factor of 10 was introduced to increase by an order of magnitude the importance of the time std
+            # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
             # Time std is usually very small and the max time is usually very large
             # But a better approach would be to normalize the values or take the square of the std
-            return STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_scaling_factor*np.max(data_imbalances)
+            obj_func = STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_scaling_factor*np.max(data_imbalances)
+            print(f"Current objective function value: {obj_func}")
+            return obj_func
 
         # Define the constraints for the optimization
         # Row sum represents the probability of data of each class that is sent
@@ -230,16 +284,7 @@ class User():
         def one_minus_sum_rows(variables, num_devices, num_clusters):
             # Reshape the flat variables back to the transition matrices shape
             transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
-
-            # Calculate the row sums ford each matrix and ensure they sum to 1
-            # Because each row is the distribution of the data of a class for a device
-            row_sums = []
-            for matrix in transition_matrices:
-                # Compute Sum(row)
-                row_sum = np.sum(matrix, axis=1)
-                # Now compute [1 - Sum(row)]
-                row_sums.extend(1. - row_sum)
-            return row_sums
+            return (1. - np.sum(transition_matrices, axis=2)).flatten()
         
         num_devices = len(self.devices)
         num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
@@ -259,7 +304,11 @@ class User():
                           options={'maxiter': 50, 'ftol': 1e-01, 'eps': 1e-01})
         # Update the transition matrices
         self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
-        print(f"Final result of optimization:\n {self.transition_matrices}")
+        if not result.success:
+            print(f"{Style.RED}[ERROR]{Style.RESET} Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
+        else:
+            print(f"{Style.GREEN}[OK]{Style.RESET} Final result of optimization:\n {self.transition_matrices}, function value {result.fun}")
+        
     
     
     # Compute the difference in capability of the user compared to last round

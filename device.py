@@ -39,6 +39,14 @@ class Device():
         # Equation 3 from ShuffleFL
         js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution)) ** 2
         return js_divergence
+    
+    def mock_data_imbalance(self):
+        reference_distribution = [len(self.dataset_clusters)/NUM_CLASSES] * NUM_CLASSES
+        distribution = [0] * NUM_CLASSES
+        for cluster in self.dataset_clusters:
+            distribution[cluster] += 1
+        js_divergence = jensenshannon(np.array(reference_distribution), np.array(distribution)) ** 2
+        return js_divergence
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs=5, verbose=True):
@@ -70,6 +78,32 @@ class Device():
             if verbose:
                 print(f"Device: {self.config['id']} Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
         self.model = net
+
+
+    def mock_remove_data(self, cluster, percentage_amount):
+        clusters = np.array([], dtype=int)
+        dataset_clusters = self.dataset_clusters
+        num_cluster_samples = len([c for c in dataset_clusters if c == cluster])
+        amount = math.floor(percentage_amount * num_cluster_samples) # Ensure that the amount is an integer
+        for _ in range(amount):
+            for idx, c in enumerate(dataset_clusters):
+                if c == cluster:
+                    # Add the sample to the list of samples to be sent if it matches the cluster
+                    # Remove the sample from the dataset and the dataset clusters
+                    clusters = np.append(clusters, c)
+                    dataset_clusters = np.delete(dataset_clusters, idx, axis=0)
+                    break
+        
+        # Update the dataset
+        self.dataset_clusters = dataset_clusters
+        # Update the number of samples that have been sent
+        self.num_transferred_samples += amount
+        return clusters
+    
+    def mock_add_data(self, clusters):
+        dataset_clusters = self.dataset_clusters
+        dataset_clusters = np.append(dataset_clusters, clusters, axis=0)
+        self.dataset_clusters = dataset_clusters
 
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it

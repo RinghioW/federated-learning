@@ -19,7 +19,6 @@ def main():
     print(parser.description)
 
     # Parse arguments
-    random.seed(42)
     args = parser.parse_args()
     num_users = args.users
     num_devices = args.devices
@@ -53,11 +52,11 @@ def main():
     # Meaning that data imbalance will not be accounted for
     # And devices will not share data with each other
     configs = [{"id" : i,
-                "compute" : np.random.randint(10**6, 10**9), # Compute capability in FLOPS
-                "memory" : np.random.randint(10**6, 10**9), # Memory capability in Bytes
-                "energy_budget" : np.random.randint(10**5,10**7), # Energy budget in J/hour
-                "uplink_rate" : np.random.randint(10**6,10**9), # Uplink rate in Bps
-                "downlink_rate" : np.random.randint(10**6,10**9) # Downlink rate in Bps
+                "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
+                "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
+                "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
+                "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
+                "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
                 } for i in range(num_devices)]
 
     print(f"Device configurations:\n {configs}")
