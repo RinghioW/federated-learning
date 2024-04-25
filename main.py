@@ -6,6 +6,7 @@ from user import User
 from server import Server
 from config import Style
 import matplotlib.pyplot as plt
+import random
 def main():
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
@@ -18,6 +19,7 @@ def main():
     print(parser.description)
 
     # Parse arguments
+    random.seed(42)
     args = parser.parse_args()
     num_users = args.users
     num_devices = args.devices
@@ -137,12 +139,12 @@ def main():
             # User measures the system latencies
             latencies = user.get_latencies(epochs=on_device_epochs)
             total_time += sum(latencies)
-            latency_history.append(sum(latencies))
+            latency_history.append(max(latencies))
             print(f"System latencies for user {user_idx+1}: {latencies}")
 
             # User measures the data imbalance
             data_imbalances = user.get_data_imbalances()
-            data_imbalance_history.append(sum(data_imbalances))
+            data_imbalance_history.append(max(data_imbalances))
             print(f"Data imbalance for user {user_idx+1}: {data_imbalances}")
 
             # User trains devices
