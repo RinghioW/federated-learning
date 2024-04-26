@@ -29,7 +29,7 @@ class Device():
     def data_imbalance(self):
         # Calculate the reference data distribution
         # The reference data distribution is a balanced distribution, all classes have the same number of samples
-        reference_distribution = [len(self.dataset)/NUM_CLASSES] * NUM_CLASSES
+        reference_distribution = [math.floor(len(self.dataset)/NUM_CLASSES)] * NUM_CLASSES
 
         # Compute the JS divergence between the reference distribution and the actual data distribution<w
         distribution = [0] * NUM_CLASSES
@@ -43,8 +43,12 @@ class Device():
     # Compute the JS divergence between the reference balanced distribution and the actual data distribution
     # In the mock version, only the clusters are used to compute the distribution
     def mock_data_imbalance(self):
+        # In case the data distribution is empty, return 0.
+        if len(self.dataset_clusters) == 0:
+            return 0.
+        # Calculate the reference data distribution
         NUM_CLUSTERS = 3
-        reference_distribution = [len(self.dataset_clusters)/NUM_CLUSTERS] * NUM_CLUSTERS
+        reference_distribution = [math.floor(len(self.dataset_clusters)/NUM_CLUSTERS)] * NUM_CLUSTERS
         distribution = [0] * NUM_CLUSTERS
         for cluster in self.dataset_clusters:
             distribution[cluster] += 1
@@ -82,7 +86,8 @@ class Device():
                 print(f"Device: {self.config['id']} Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
         self.model = net
 
-
+    # Mock functions are used to simulate the transfer of data between devices
+    # Useful for optimization of the transmission matrices (and not the actual data transfer)
     def mock_remove_data(self, cluster, percentage_amount):
         clusters = np.array([], dtype=int)
         dataset_clusters = self.dataset_clusters

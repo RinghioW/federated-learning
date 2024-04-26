@@ -77,7 +77,9 @@ def main():
     user_latency_history = [[] for _ in range(num_users)]
     user_data_imbalance_history = [[] for _ in range(num_users)]
     losses = []
+    losses.append(initial_loss)
     accuracies = []
+    accuracies.append(initial_accuracy)
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
@@ -162,31 +164,38 @@ def main():
     # Plot latency and data imbalance history
     for user_idx in range(num_users):
         # Plot latency history
+        print(f"User {user_idx+1} latency history: {user_latency_history[user_idx]}")
         plt.plot(user_latency_history[user_idx])
         plt.title(f"Latency History for User {user_idx+1}")
         plt.xlabel("Epoch")
         plt.ylabel("Latency")
-        plt.show()
+        plt.savefig(f"latency_history_user_{user_idx+1}.png")
+        plt.close()
         # Plot data imbalance history
+        print(f"User {user_idx+1} data imbalance history: {user_data_imbalance_history[user_idx]}")
         plt.plot(user_data_imbalance_history[user_idx])
         plt.title(f"Data Imbalance History for User {user_idx+1}")
         plt.xlabel("Epoch")
         plt.ylabel("Imbalance")
-        plt.show()
+        plt.savefig(f"data_imbalance_history_user_{user_idx+1}.png")
+        plt.close()
 
     # Plot loss history
+    print(f"Loss history: {losses}")
     plt.plot(losses)
     plt.title("Loss History")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.show()
-
+    plt.savefig("loss_history.png")
+    plt.close()
     # Plot accuracy history
+    print(f"Accuracy history: {accuracies}")
     plt.plot(accuracies)
     plt.title("Accuracy History")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
-    plt.show()
+    plt.savefig("accuracy_history.png")
+    plt.close()
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")
