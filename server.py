@@ -70,7 +70,7 @@ class Server():
 
     # Select users for the next round of training
     # TODO: Consider tier-based selection (TiFL) instead of random selection
-    def select_users(self, users, split=0.5):
+    def select_users(self, users, split=1.):
         # self.users = random.choices(users, k=math.floor(split*len(users)))
         self.users = users
         self.wall_clock_training_times = [1.] * len(self.users)

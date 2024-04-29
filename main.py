@@ -60,10 +60,10 @@ def main():
                 "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
                 } for i in range(num_devices)]
 
-    print(f"Device configurations:\n {configs}")
-
     # Create devices and users
     devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
+    for device in devices:
+        print(f"Device configurations:\n {device.config}")
     devices_grouped = np.array_split(devices, num_users)
     users = [User(devices_grouped[i]) for i in range(num_users)]
     server = Server(dataset)
@@ -74,8 +74,8 @@ def main():
     print(f"{Style.YELLOW}Evaluating server model before training...{Style.RESET}")
     initial_loss, initial_accuracy = server.evaluate(testset)
     print(f"{Style.YELLOW}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
-    user_latency_history = [[] for _ in range(num_users)]
-    user_data_imbalance_history = [[] for _ in range(num_users)]
+    latency_histories = [[] for _ in range(num_users)]
+    data_imbalance_histories = [[] for _ in range(num_users)]
     losses = []
     losses.append(initial_loss)
     accuracies = []
@@ -102,20 +102,23 @@ def main():
         # Can be executed in parallel
         n_cores = cpu_count()
         print(f"Number of cores is {n_cores}")
-        users, latency_histories, data_imbalance_histories = zip(*Parallel(n_jobs=n_cores, backend="multiprocessing")(delayed(train_user)(
+        res = Parallel(n_jobs=n_cores, backend="multiprocessing")(delayed(train_user)(
                                                        server, 
                                                        user, 
                                                        user_idx, 
-                                                       user_latency_history, 
-                                                       user_data_imbalance_history, 
+                                                       latency_histories[user_idx], 
+                                                       data_imbalance_histories[user_idx], 
                                                        on_device_epochs, 
                                                        adapt, 
-                                                       shuffle) for user_idx, user in enumerate(users)))
+                                                       shuffle) for user_idx, user in enumerate(users))
+        users = [item[0] for item in res]
+        latency_histories = [item[1] for item in res]
+        data_imbalance_histories = [item[2] for item in res]
 
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
         print(f"Updating server model...")
-        server.users = users
+        server.users = list(users)
         server = server.aggregate_updates()
         
         # Server evaluates the model
@@ -201,11 +204,11 @@ def train_user(server, user, user_idx, user_latency_history, user_data_imbalance
     # User measures the system latencies
     latencies = user.get_latencies(epochs=on_device_epochs)
     # total_time += sum(latencies)
-    user_latency_history[user_idx].append(max(latencies))
+    user_latency_history.append(max(latencies))
 
     # User measures the data imbalance
     data_imbalances = user.get_data_imbalances()
-    user_data_imbalance_history[user_idx].append(max(data_imbalances))
+    user_data_imbalance_history.append(max(data_imbalances))
 
     # User trains devices
     # ShuffleFL step 11-15
