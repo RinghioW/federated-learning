@@ -62,7 +62,7 @@ class Device():
         net = self.model
         to_tensor = transforms.ToTensor()
         dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, num_workers=3)
+        trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
         """Train the network on the training set."""
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(net.parameters())
@@ -85,6 +85,7 @@ class Device():
             if verbose:
                 print(f"Device: {self.config['id']} Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
         self.model = net
+        return self
 
     # Mock functions are used to simulate the transfer of data between devices
     # Useful for optimization of the transmission matrices (and not the actual data transfer)
@@ -106,12 +107,13 @@ class Device():
         self.dataset_clusters = dataset_clusters
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount
-        return clusters
+        return self, clusters
     
     def mock_add_data(self, clusters):
         dataset_clusters = self.dataset_clusters
         dataset_clusters = np.append(dataset_clusters, clusters, axis=0)
         self.dataset_clusters = dataset_clusters
+        return self
 
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it
@@ -141,7 +143,7 @@ class Device():
         self.dataset_clusters = dataset_clusters
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount
-        return samples, clusters
+        return self, samples, clusters
 
     # Used in the transfer function to receive data from a different device
     def add_data(self, samples, clusters):
@@ -151,6 +153,7 @@ class Device():
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
         self.dataset_clusters = np.append(self.dataset_clusters, clusters, axis=0)
         assert(len(self.dataset) == len(self.dataset_clusters))
+        return self
 
 
     # Assing each datapoint to a cluster
@@ -165,3 +168,4 @@ class Device():
         # Cluster datapoints to k classes using KMeans
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
         self.dataset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
+        return self

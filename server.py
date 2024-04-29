@@ -6,7 +6,7 @@ import math
 import torchvision
 from adaptivenet import AdaptiveNet
 class Server():
-    def __init__(self, dataset) -> None:
+    def __init__(self, dataset):
         if dataset == "cifar10":
             self.model = AdaptiveNet()
         else:
@@ -29,6 +29,7 @@ class Server():
         for key in sum_weights:
             sum_weights[key] = type(sum_weights[key])(sum_weights[key]/len(self.users))
         self.model.load_state_dict(sum_weights)
+        return self
 
     # Evaluate the server model on the test set
     # TODO: Find a way to compare this evaluation to some other H-FL method
@@ -64,6 +65,8 @@ class Server():
         # Compute adaptive scaling factor for each user
         for idx, user in enumerate(self.users):
             user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * self.scaling_factor
+            self.users[idx] = user
+        return self
 
     # Select users for the next round of training
     # TODO: Consider tier-based selection (TiFL) instead of random selection
@@ -71,3 +74,4 @@ class Server():
         # self.users = random.choices(users, k=math.floor(split*len(users)))
         self.users = users
         self.wall_clock_training_times = [1.] * len(self.users)
+        return self
