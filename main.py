@@ -74,7 +74,6 @@ def main():
     print(f"{Style.YELLOW}Evaluating server model before training...{Style.RESET}")
     initial_loss, initial_accuracy = server.evaluate(testset)
     print(f"{Style.YELLOW}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
-    total_time = 0.0
     user_latency_history = [[] for _ in range(num_users)]
     user_data_imbalance_history = [[] for _ in range(num_users)]
     losses = []
@@ -82,7 +81,7 @@ def main():
     accuracies = []
     accuracies.append(initial_accuracy)
     
-    server.select_users(users, split=1.0)
+    server = server.select_users(users, split=1.0)
 
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
@@ -97,80 +96,26 @@ def main():
         # Users report the staleness factor to the server, and
         # The server sends the adaptive scaling factor to the users
         # ShuffleFL step 4, 5
-        server.send_adaptive_scaling_factor()
+        server = server.send_adaptive_scaling_factor()
 
         # ShuffleFL step 6
         # Can be executed in parallel
         n_cores = cpu_count()
         print(f"Number of cores is {n_cores}")
-        users, latency_histories, data_imbalance_histories = Parallel(n_jobs=n_cores, backend="multiprocessing")(delayed(train_user)(server, 
+        users, latency_histories, data_imbalance_histories = zip(*Parallel(n_jobs=n_cores, backend="multiprocessing")(delayed(train_user)(
+                                                       server, 
                                                        user, 
                                                        user_idx, 
                                                        user_latency_history, 
                                                        user_data_imbalance_history, 
                                                        on_device_epochs, 
                                                        adapt, 
-                                                       shuffle) for user_idx, user in enumerate(users))
-        # for user_idx, user in enumerate(server.users):
-            
-        #     if adapt:
-        #         # User adapts the model for their devices
-        #         # ShuffleFL Novelty
-        #         user = user.adapt_model(server.model)
-
-            
-        #     if shuffle:
-        #         # User measures the system latencies
-        #         latencies = user.get_latencies(epochs=on_device_epochs)
-
-        #         # User measures the data imbalance
-        #         data_imbalances = user.get_data_imbalances()
-
-        #         # Reduce dimensionality of the transmission matrices
-        #         # ShuffleFL step 7, 8
-        #         user = user.reduce_dimensionality()
-                
-        #         # User optimizes the transmission matrices
-        #         # ShuffleFL step 9
-        #         user = user.optimize_transmission_matrices()
-
-        #         # User shuffles the data
-        #         # ShuffleFL step 10
-        #         user = user.shuffle_data(user.transition_matrices)
-
-        #     if adapt:
-        #         # User creates the knowledge distillation dataset
-        #         # ShuffleFL Novelty
-        #         user = user.create_kd_dataset()
-
-        #         # User updates parameters based on last iteration
-        #         user = user.update_average_capability()
-
-        #     # User measures the system latencies
-        #     latencies = user.get_latencies(epochs=on_device_epochs)
-        #     total_time += sum(latencies)
-        #     user_latency_history[user_idx].append(max(latencies))
-
-        #     # User measures the data imbalance
-        #     data_imbalances = user.get_data_imbalances()
-        #     user_data_imbalance_history[user_idx].append(max(data_imbalances))
-
-        #     # User trains devices
-        #     # ShuffleFL step 11-15
-        #     user = user.train_devices(epochs=on_device_epochs, verbose=True)
-
-        #     if adapt:
-        #         # User trains the model using knowledge distillation
-        #         # ShuffleFL step 16, 17
-        #         print(f"Aggregating updates from user {user_idx+1}...")
-        #         user = user.aggregate_updates()
-            
-        #     # Update the user model on the server
-        #     server.users[user_idx] = user
+                                                       shuffle) for user_idx, user in enumerate(users)))
 
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
         print(f"Updating server model...")
+        server.users = users
         server = server.aggregate_updates()
         
         # Server evaluates the model
