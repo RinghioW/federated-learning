@@ -4,7 +4,7 @@ import time
 from device import Device
 from user import User
 from server import Server
-from config import Style
+from config import Style, STD_CORRECTION
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed, cpu_count
 
@@ -76,6 +76,7 @@ def main():
     print(f"{Style.YELLOW}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
     latency_histories = [[] for _ in range(num_users)]
     data_imbalance_histories = [[] for _ in range(num_users)]
+    obj_functions = [[] for _ in range(num_users)]
     losses = []
     losses.append(initial_loss)
     accuracies = []
@@ -100,36 +101,86 @@ def main():
 
         # ShuffleFL step 6
         # Can be executed in parallel
-        n_cores = cpu_count()
-        res = Parallel(n_jobs=n_cores, backend="multiprocessing")(delayed(train_user)(
-                                                       server, 
-                                                       user, 
-                                                       user_idx, 
-                                                       latency_histories[user_idx], 
-                                                       data_imbalance_histories[user_idx], 
-                                                       on_device_epochs, 
-                                                       adapt, 
-                                                       shuffle) for user_idx, user in enumerate(users))
-        users = [item[0] for item in res]
-        latency_histories = [item[1] for item in res]
-        data_imbalance_histories = [item[2] for item in res]
+        # n_cores = cpu_count()
+        # res = Parallel(n_jobs=n_cores, backend="threading")(delayed(train_user)(
+        #                                                server, 
+        #                                                user, 
+        #                                                user_idx, 
+        #                                                latency_histories[user_idx], 
+        #                                                data_imbalance_histories[user_idx], 
+        #                                                on_device_epochs, 
+        #                                                adapt, 
+        #                                                shuffle) for user_idx, user in enumerate(users))
+        # users = [item[0] for item in res]
+        # latency_histories = [item[1] for item in res]
+        # data_imbalance_histories = [item[2] for item in res]
+
+        for user_idx, user in enumerate(users):
+            if adapt:
+                # User adapts the model for their devices
+                # ShuffleFL Novelty
+                user = user.adapt_model(server.model)
+            
+            if shuffle:
+                # User measures the system latencies
+                latencies = user.get_latencies(epochs=on_device_epochs)
+
+                # User measures the data imbalance
+                data_imbalances = user.get_data_imbalances()
+
+                # Reduce dimensionality of the transmission matrices
+                # ShuffleFL step 7, 8
+                user = user.user_reduce_dimensionality()
+                
+                # User optimizes the transmission matrices
+                # ShuffleFL step 9
+                user = user.optimize_transmission_matrices()
+
+                # User shuffles the data
+                # ShuffleFL step 10
+                user = user.shuffle_data(user.transition_matrices)
+
+            if adapt:
+                # User creates the knowledge distillation dataset
+                # ShuffleFL Novelty
+                user = user.create_kd_dataset()
+
+                # User updates parameters based on last iteration
+                user = user.update_average_capability()
+
+            # User measures the system latencies
+            latencies = user.get_latencies(epochs=on_device_epochs)
+            # total_time += sum(latencies)
+            latency_histories[user_idx].append(max(latencies))
+
+            # User measures the data imbalance
+            data_imbalances = user.get_data_imbalances()
+            data_imbalance_histories[user_idx].append(max(data_imbalances))
+
+            obj_functions[user_idx].append(STD_CORRECTION*np.std(latencies) + np.max(latencies) + user.adaptive_scaling_factor*np.max(data_imbalances))
+            # User trains devices
+            # ShuffleFL step 11-15
+            user = user.train_devices(epochs=on_device_epochs, verbose=True)
+
+            if adapt:
+                # User trains the model using knowledge distillation
+                # ShuffleFL step 16, 17
+                user = user.aggregate_updates()
 
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
-        print(f"Updating server model...")
         server.users = list(users)
         server = server.aggregate_updates()
         
         # Server evaluates the model
-        print(f"Evaluating trained server model...")
         loss, accuracy = server.evaluate(testset)
+        print(f"{Style.YELLOW}SERVER :{Style.RESET} Loss: {loss}, Accuracy: {accuracy}")
         losses.append(loss)
         accuracies.append(accuracy)
     
     # Plot latency and data imbalance history
     for user_idx in range(num_users):
         # Plot latency history
-        print(f"User {user_idx+1} latency history: {latency_histories[user_idx]}")
         plt.plot(latency_histories[user_idx])
         plt.title(f"Latency History for User {user_idx+1}")
         plt.xlabel("Epoch")
@@ -137,7 +188,6 @@ def main():
         plt.savefig(f"latency_history_user_{user_idx+1}.png")
         plt.close()
         # Plot data imbalance history
-        print(f"User {user_idx+1} data imbalance history: {data_imbalance_histories[user_idx]}")
         plt.plot(data_imbalance_histories[user_idx])
         plt.title(f"Data Imbalance History for User {user_idx+1}")
         plt.xlabel("Epoch")
@@ -145,8 +195,14 @@ def main():
         plt.savefig(f"data_imbalance_history_user_{user_idx+1}.png")
         plt.close()
 
+        plt.plot(obj_functions[user_idx])
+        plt.title(f"Objective Function History for User {user_idx+1}")
+        plt.xlabel("Epoch")
+        plt.ylabel("Objective Function")
+        plt.savefig(f"objective_function_user_{user_idx+1}.png")
+        plt.close()
+
     # Plot loss history
-    print(f"Loss history: {losses}")
     plt.plot(losses)
     plt.title("Loss History")
     plt.xlabel("Epoch")
@@ -154,7 +210,6 @@ def main():
     plt.savefig("loss_history.png")
     plt.close()
     # Plot accuracy history
-    print(f"Accuracy history: {accuracies}")
     plt.plot(accuracies)
     plt.title("Accuracy History")
     plt.xlabel("Epoch")
@@ -164,7 +219,6 @@ def main():
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")
-    print(f"Accuracy improvement: {accuracy - initial_accuracy}")
 
 def train_user(server, user, user_idx, user_latency_history, user_data_imbalance_history, on_device_epochs, adapt, shuffle):
     if adapt:

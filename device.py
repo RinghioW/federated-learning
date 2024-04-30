@@ -5,18 +5,19 @@ import math
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
 from scipy.spatial.distance import jensenshannon
-import time
 import torchvision.transforms as transforms
 import datasets
-from config import Style
+from copy import deepcopy
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
         self.dataset = dataset
 
         self.valset = valset
+
         self.model = None
-        self.already_trained = False
+        self.model_state_dict = None
+        self.optimizer_state_dict = None
 
         self.dataset_clusters = None # For each sample, the cluster that the sample belongs to
 
@@ -58,17 +59,19 @@ class Device():
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs=10, verbose=False):
-        print(f"Training device {self.config['id']} is already trained: {self.already_trained}.")
-        self.already_trained = True
         if self.model is None or self.dataset is None:
             raise ValueError("Model or dataset is None.")
         net = self.model
+        if self.model_state_dict is not None:
+            net.load_state_dict(self.model_state_dict)
         to_tensor = transforms.ToTensor()
         dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
         """Train the network on the training set."""
         criterion = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(net.parameters())
+        if self.optimizer_state_dict is not None:
+            optimizer.load_state_dict(self.optimizer_state_dict)
         net.train()
         for epoch in range(epochs):
             correct, total, epoch_loss = 0, 0, 0.0
@@ -88,6 +91,8 @@ class Device():
             if verbose:
                 print(f"Device {self.config['id']} - Epoch {epoch+1}: loss {epoch_loss}, accuracy {epoch_acc}")
         self.model = net
+        self.model_state_dict = deepcopy(net.state_dict())
+        self.optimizer_state_dict = deepcopy(optimizer.state_dict())
         return self
 
     # Mock functions are used to simulate the transfer of data between devices

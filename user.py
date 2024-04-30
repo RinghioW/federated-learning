@@ -1,4 +1,3 @@
-import torchvision.models as models
 import torch
 import numpy as np
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
@@ -11,11 +10,14 @@ from adaptivenet import AdaptiveNet
 from config import Style
 from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
+from copy import deepcopy
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
         self.kd_dataset = []
         self.model = None
+        self.model_state_dict = None
+        self.optimizer_state_dict = None
 
         # SHUFFLE-FL
 
@@ -68,6 +70,9 @@ class User():
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
+        if self.model_state_dict is not None:
+            student.load_state_dict(self.model_state_dict)
+
         # TODO : Train in parallel, not sequentially (?)
         teachers = [device.model for device in self.devices]
         to_tensor = torchvision.transforms.ToTensor()
@@ -76,20 +81,23 @@ class User():
         train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True)
         ce_loss = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
+        if self.optimizer_state_dict is not None:
+            optimizer.load_state_dict(self.optimizer_state_dict)
         student.train() # Student to train mode
         for epoch in range(epochs):
             running_loss = 0.0
             running_kd_loss = 0.0
             running_ce_loss = 0.0
+            running_accuracy = 0.0
             for batch in train_loader:
                 inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
 
                 optimizer.zero_grad()
 
+                teacher_logits = []
                 # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
                 with torch.no_grad():
                     # Keep the teacher logits for the soft targets
-                    teacher_logits = []
                     for teacher in teachers:
                         teacher.eval()  # Teacher set to evaluation mode
                         if teacher.quantize:
@@ -115,15 +123,17 @@ class User():
 
                 # Weighted sum of the two losses
                 loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
-
                 loss.backward()
                 optimizer.step()
 
                 running_loss += loss.item()
                 running_kd_loss += soft_targets_loss
                 running_ce_loss += label_loss
-            print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)})")
+                running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)}), Accuracy: {running_accuracy / len(train_loader.dataset)}")
         self.model = student
+        self.model_state_dict = deepcopy(student.state_dict())
+        self.optimizer_state_dict = deepcopy(optimizer.state_dict())
         return self
 
     # Train all the devices belonging to the user

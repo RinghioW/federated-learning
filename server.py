@@ -1,14 +1,13 @@
-import torchvision.models as models
 import torch
 from config import DEVICE
-import random
-import math
 import torchvision
 from adaptivenet import AdaptiveNet
+from copy import deepcopy
 class Server():
     def __init__(self, dataset):
         if dataset == "cifar10":
             self.model = AdaptiveNet()
+            self.model_state_dict = None
         else:
             # TODO: Add more datasets
             # Femnist, Shakespeare
@@ -22,13 +21,14 @@ class Server():
     # Step 18 in the ShuffleFL algorithm
     # TODO: Use FedAvg instead of parameter averaging (aggregate the gradients instead of the weights)
     def aggregate_updates(self):
-        sum_weights = self.users[0].model.state_dict()
+        sum_weights = self.users[0].model_state_dict
         for user in self.users[1:]:
             for key in sum_weights:
-                sum_weights[key] += user.model.state_dict()[key]
+                sum_weights[key] += user.model_state_dict[key]
         for key in sum_weights:
             sum_weights[key] = type(sum_weights[key])(sum_weights[key]/len(self.users))
         self.model.load_state_dict(sum_weights)
+        self.model_state_dict = deepcopy(sum_weights)
         return self
 
     # Evaluate the server model on the test set
@@ -38,6 +38,8 @@ class Server():
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)
         net = self.model
+        if self.model_state_dict is not None:
+            net.load_state_dict(self.model_state_dict)
         """Evaluate the network on the entire test set."""
         criterion = torch.nn.CrossEntropyLoss()
         correct, total, loss = 0, 0, 0.0
