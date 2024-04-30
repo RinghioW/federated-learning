@@ -11,8 +11,8 @@ from joblib import Parallel, delayed, cpu_count
 def main():
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
-    parser.add_argument("-u", "--users", dest="users", type=int, default=2, help="Total number of users (default: 2)")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=6, help="Total number of devices (default: 6)")
+    parser.add_argument("-u", "--users", dest="users", type=int, default=4, help="Total number of users (default: 2)")
+    parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs (default: 2)")
     parser.add_argument("--no-shuffle", dest="shuffle", type=bool, default=False, help="Enable data shuffling")
@@ -101,7 +101,6 @@ def main():
         # ShuffleFL step 6
         # Can be executed in parallel
         n_cores = cpu_count()
-        print(f"Number of cores is {n_cores}")
         res = Parallel(n_jobs=n_cores, backend="multiprocessing")(delayed(train_user)(
                                                        server, 
                                                        user, 
@@ -168,7 +167,6 @@ def main():
     print(f"Accuracy improvement: {accuracy - initial_accuracy}")
 
 def train_user(server, user, user_idx, user_latency_history, user_data_imbalance_history, on_device_epochs, adapt, shuffle):
-    print(f"User {user_idx+1} training...")
     if adapt:
         # User adapts the model for their devices
         # ShuffleFL Novelty
@@ -183,7 +181,7 @@ def train_user(server, user, user_idx, user_latency_history, user_data_imbalance
 
         # Reduce dimensionality of the transmission matrices
         # ShuffleFL step 7, 8
-        user = user.reduce_dimensionality()
+        user = user.user_reduce_dimensionality()
         
         # User optimizes the transmission matrices
         # ShuffleFL step 9
@@ -217,7 +215,6 @@ def train_user(server, user, user_idx, user_latency_history, user_data_imbalance
     if adapt:
         # User trains the model using knowledge distillation
         # ShuffleFL step 16, 17
-        print(f"Aggregating updates from user {user_idx+1}...")
         user = user.aggregate_updates()
     return user, user_latency_history, user_data_imbalance_history
 

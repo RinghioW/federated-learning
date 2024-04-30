@@ -16,6 +16,7 @@ class Device():
 
         self.valset = valset
         self.model = None
+        self.already_trained = False
 
         self.dataset_clusters = None # For each sample, the cluster that the sample belongs to
 
@@ -57,6 +58,8 @@ class Device():
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs=10, verbose=False):
+        print(f"Training device {self.config['id']} is already trained: {self.already_trained}.")
+        self.already_trained = True
         if self.model is None or self.dataset is None:
             raise ValueError("Model or dataset is None.")
         net = self.model
@@ -83,7 +86,7 @@ class Device():
             epoch_loss /= len(trainloader.dataset)
             epoch_acc = correct / total
             if verbose:
-                print(f"Device: {self.config['id']} Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
+                print(f"Device {self.config['id']} - Epoch {epoch+1}: loss {epoch_loss}, accuracy {epoch_acc}")
         self.model = net
         return self
 

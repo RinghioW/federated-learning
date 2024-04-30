@@ -9,6 +9,8 @@ import torchvision
 import datasets
 from adaptivenet import AdaptiveNet
 from config import Style
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
 class User():
     def __init__(self, devices, classes=NUM_CLASSES) -> None:
         self.devices = devices
@@ -77,6 +79,8 @@ class User():
         student.train() # Student to train mode
         for epoch in range(epochs):
             running_loss = 0.0
+            running_kd_loss = 0.0
+            running_ce_loss = 0.0
             for batch in train_loader:
                 inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
 
@@ -116,7 +120,9 @@ class User():
                 optimizer.step()
 
                 running_loss += loss.item()
-            print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)}")
+                running_kd_loss += soft_targets_loss
+                running_ce_loss += label_loss
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)})")
         self.model = student
         return self
 
@@ -260,6 +266,10 @@ class User():
             device = device.cluster_data(self.shrinkage_ratio)
             self.devices[idx] = device
         return self
+    
+    def user_reduce_dimensionality(self):
+        self.user_cluster_data(self.shrinkage_ratio)
+        return self
 
     # Function for optimizing equation 7 from ShuffleFL
     def optimize_transmission_matrices(self):
@@ -354,4 +364,26 @@ class User():
         for device in self.devices:
             kd_dataset.extend(device.dataset)
         self.kd_dataset = kd_dataset
+        return self
+    
+    def user_cluster_data(self, shrinkage_ratio):
+        # Assemble the entire dataset from the devices
+        dataset = np.array(self.devices[0].dataset)
+        for device in self.devices[1:]:
+            dataset = np.append(dataset, device.dataset, axis=0)
+        dataset = datasets.Dataset.from_list(dataset.tolist())
+
+        feature_space = np.array(dataset["img"]).reshape(len(dataset), -1)
+        feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
+        # Cluster datapoints to k classes using KMeans
+        n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
+        dataset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
+
+        # Assign the a partition clusters to the devices
+        idx = 0
+        for device_idx, device in enumerate(self.devices):
+            # Assign the cluster partition to the devices
+            device.dataset_clusters = dataset_clusters[idx:idx+len(device.dataset)]
+            idx+=len(device.dataset)
+            self.devices[device_idx] = device
         return self
