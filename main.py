@@ -185,21 +185,21 @@ def main():
         plt.title(f"Latency History for User {user_idx+1}")
         plt.xlabel("Epoch")
         plt.ylabel("Latency")
-        plt.savefig(f"latency_history_user_{user_idx+1}.png")
+        plt.savefig(f"results/latency_history_user_{user_idx+1}.png")
         plt.close()
         # Plot data imbalance history
         plt.plot(data_imbalance_histories[user_idx])
         plt.title(f"Data Imbalance History for User {user_idx+1}")
         plt.xlabel("Epoch")
         plt.ylabel("Imbalance")
-        plt.savefig(f"data_imbalance_history_user_{user_idx+1}.png")
+        plt.savefig(f"results/data_imbalance_history_user_{user_idx+1}.png")
         plt.close()
 
         plt.plot(obj_functions[user_idx])
         plt.title(f"Objective Function History for User {user_idx+1}")
         plt.xlabel("Epoch")
         plt.ylabel("Objective Function")
-        plt.savefig(f"objective_function_user_{user_idx+1}.png")
+        plt.savefig(f"results/objective_function_user_{user_idx+1}.png")
         plt.close()
 
     # Plot loss history
@@ -207,14 +207,14 @@ def main():
     plt.title("Loss History")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.savefig("loss_history.png")
+    plt.savefig("results/loss_history.png")
     plt.close()
     # Plot accuracy history
     plt.plot(accuracies)
     plt.title("Accuracy History")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
-    plt.savefig("accuracy_history.png")
+    plt.savefig("results/accuracy_history.png")
     plt.close()
 
     time_end = time.time()

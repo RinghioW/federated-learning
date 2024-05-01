@@ -366,14 +366,16 @@ class User():
         self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
         return self
     
-    def create_kd_dataset(self):
+    def create_kd_dataset(self, percentage_amount=0.1):
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
         kd_dataset = []
         for device in self.devices:
-            kd_dataset.extend(device.dataset)
-        self.kd_dataset = kd_dataset
+            dataset = np.array(device.dataset)
+            dataset_idxs = np.random.choice(a=dataset.shape[0], size=math.floor(percentage_amount*len(dataset)), replace=False)
+            kd_dataset = np.array([dataset[idx] for idx in dataset_idxs])
+        self.kd_dataset = datasets.Dataset.from_list(kd_dataset.tolist())
         return self
     
     def user_cluster_data(self, shrinkage_ratio):
