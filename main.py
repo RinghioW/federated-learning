@@ -5,8 +5,8 @@ from device import Device
 from user import User
 from server import Server
 from config import Style, STD_CORRECTION
-import matplotlib.pyplot as plt
 from joblib import Parallel, delayed, cpu_count
+from plots import plot_results
 
 def main():
     # Define arguments
@@ -27,6 +27,11 @@ def main():
     server_epochs = args.epochs
     shuffle = not args.shuffle
     adapt = not args.adapt
+
+    if not shuffle:
+        results_dir = "results/no_shuffle/"
+    else:
+        results_dir = "results/final/"
 
     datasets = ["cifar10", "femnist", "shakespeare"]
     if dataset not in datasets:
@@ -177,45 +182,9 @@ def main():
         print(f"{Style.YELLOW}SERVER :{Style.RESET} Loss: {loss}, Accuracy: {accuracy}")
         losses.append(loss)
         accuracies.append(accuracy)
-    
-    # Plot latency and data imbalance history
-    for user_idx in range(num_users):
-        # Plot latency history
-        plt.plot(latency_histories[user_idx])
-        plt.title(f"Latency History for User {user_idx+1}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Latency")
-        plt.savefig(f"results/latency_history_user_{user_idx+1}.png")
-        plt.close()
-        # Plot data imbalance history
-        plt.plot(data_imbalance_histories[user_idx])
-        plt.title(f"Data Imbalance History for User {user_idx+1}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Imbalance")
-        plt.savefig(f"results/data_imbalance_history_user_{user_idx+1}.png")
-        plt.close()
 
-        plt.plot(obj_functions[user_idx])
-        plt.title(f"Objective Function History for User {user_idx+1}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Objective Function")
-        plt.savefig(f"results/objective_function_user_{user_idx+1}.png")
-        plt.close()
-
-    # Plot loss history
-    plt.plot(losses)
-    plt.title("Loss History")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.savefig("results/loss_history.png")
-    plt.close()
-    # Plot accuracy history
-    plt.plot(accuracies)
-    plt.title("Accuracy History")
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
-    plt.savefig("results/accuracy_history.png")
-    plt.close()
+    # Save the results
+    plot_results(results_dir, num_users, latency_histories, data_imbalance_histories, obj_functions, losses, accuracies)
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")
