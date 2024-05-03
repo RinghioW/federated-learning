@@ -3,6 +3,7 @@ from config import DEVICE
 import torchvision
 from adaptivenet import AdaptiveNet
 from copy import deepcopy
+from config import Style
 class Server():
     def __init__(self, dataset):
         if dataset == "cifar10":
@@ -26,9 +27,9 @@ class Server():
             for key in sum_weights:
                 sum_weights[key] += user.model_state_dict[key]
         for key in sum_weights:
-            sum_weights[key] = type(sum_weights[key])(sum_weights[key]/len(self.users))
-        self.model.load_state_dict(sum_weights)
-        self.model_state_dict = deepcopy(sum_weights)
+            sum_weights[key] = type(sum_weights[key])(sum_weights[key] * (1/len(self.users)))
+        incompatible_keys = self.model.load_state_dict(sum_weights)
+        self.model_state_dict = deepcopy(self.model.state_dict())
         return self
 
     # Evaluate the server model on the test set
