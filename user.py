@@ -37,9 +37,9 @@ class User():
         self.staleness_factor = 0.0
 
         # Average capability beta
-        self.diff_capability = 1. + STD_CORRECTION*random.random()
-        self.average_power = 1. + STD_CORRECTION*random.random()
-        self.average_bandwidth = 1. + STD_CORRECTION*random.random()
+        self.diff_capability = 1. + random.random()
+        self.average_power = 1. + random.random()
+        self.average_bandwidth = 1. + random.random()
 
 
     # Adapt the model to the devices
@@ -68,7 +68,7 @@ class User():
         return self
 
     # Train the user model using knowledge distillation
-    def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
+    def aggregate_updates(self, learning_rate=0.01, epochs=10, T=3, soft_target_loss_weight=0.6, ce_loss_weight=0.4):
         student = self.model
         if self.model_state_dict is not None:
             student.load_state_dict(self.model_state_dict)
@@ -306,7 +306,9 @@ class User():
             # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
             # Time std is usually very small and the max time is usually very large
             # But a better approach would be to normalize the values or take the square of the std
-            obj_func = STD_CORRECTION*np.std(latencies) + np.max(latencies) + self.adaptive_scaling_factor*np.max(data_imbalances)
+            system_latency = STD_CORRECTION*np.std(latencies) + np.max(latencies)
+            data_imbalance = self.adaptive_scaling_factor*np.max(data_imbalances)
+            obj_func = system_latency + data_imbalance
             return obj_func
 
         # Define the constraints for the optimization
