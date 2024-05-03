@@ -68,7 +68,7 @@ class User():
         return self
 
     # Train the user model using knowledge distillation
-    def aggregate_updates(self, learning_rate=0.01, epochs=10, T=3, soft_target_loss_weight=0.6, ce_loss_weight=0.4):
+    def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model
         if self.model_state_dict is not None:
             student.load_state_dict(self.model_state_dict)
@@ -132,7 +132,7 @@ class User():
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
             print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)}), Accuracy: {running_accuracy / len(train_loader.dataset)}")
         self.model = student
-        self.model_state_dict = deepcopy(student.state_dict())
+        self.model_state_dict = deepcopy(self.model.state_dict())
         self.optimizer_state_dict = deepcopy(optimizer.state_dict())
         return self
 
@@ -368,7 +368,7 @@ class User():
         self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
         return self
     
-    def create_kd_dataset(self, percentage_amount=0.1):
+    def create_kd_dataset(self, percentage_amount=1):
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
