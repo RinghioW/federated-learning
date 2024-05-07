@@ -11,13 +11,14 @@ from plots import plot_results
 def main():
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
+    print(parser.description)
+
     parser.add_argument("-u", "--users", dest="users", type=int, default=4, help="Total number of users (default: 2)")
     parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs (default: 2)")
     parser.add_argument("--no-shuffle", dest="shuffle", type=bool, default=False, help="Enable data shuffling")
     parser.add_argument("--no-adapt", dest="adapt", type=bool, default=False, help="Enable model adaptation")
-    print(parser.description)
 
     # Parse arguments
     args = parser.parse_args()
@@ -40,7 +41,7 @@ def main():
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
         from data.cifar10 import load_datasets
-        trainsets, valsets, testset = load_datasets(num_devices)
+        trainsets, valsets, testset = load_datasets(num_clients=num_devices, epochs=server_epochs)
     elif dataset == "femnist":
         from data.femnist import load_datasets
         trainsets, valsets, testset = load_datasets(num_devices)
@@ -66,7 +67,7 @@ def main():
                 } for i in range(num_devices)]
 
     # Create devices and users
-    devices = [Device(configs[i], trainsets[i], valsets[i]) for i in range(num_devices)]
+    devices = [Device(configs[i], trainsets[i*server_epochs], valsets[i*server_epochs]) for i in range(num_devices)]
     for device in devices:
         print(f"Device configurations:\n {device.config}")
     devices_grouped = np.array_split(devices, num_users)
@@ -118,9 +119,9 @@ def main():
         #                                                shuffle) for user_idx, user in enumerate(users))
         # users = [item[0] for item in res]
         # latency_histories = [item[1] for item in res]
-        # data_imbalance_histories = [item[2] for item in res]
+        # data_imbalance_hi stories = [item[2] for item in res]
 
-        for user_idx, user in enumerate(users):
+        for user_idx, user in enumerate(server.users):
             if adapt:
                 # User adapts the model for their devices
                 # ShuffleFL Novelty
@@ -172,9 +173,9 @@ def main():
                 # ShuffleFL step 16, 17
                 user = user.aggregate_updates()
 
+            server.users[user_idx] = user
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
-        server.users = list(users)
         server = server.aggregate_updates()
         
         # Server evaluates the model
@@ -183,6 +184,15 @@ def main():
         losses.append(loss)
         accuracies.append(accuracy)
 
+        # Update the data on the devices
+        for user_idx, user in enumerate(server.users):
+            for device_idx, device in enumerate(user.devices):
+                idx = user_idx*num_devices//num_users + device_idx
+                device.dataset = trainsets[idx*server_epochs + epoch]
+                device.valset = valsets[idx*server_epochs + epoch]
+                user.devices[device_idx] = device
+            server.users[user_idx] = user
+            
     # Save the results
     plot_results(results_dir, num_users, latency_histories, data_imbalance_histories, obj_functions, losses, accuracies)
 

@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import numpy as np
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
@@ -76,61 +77,52 @@ class User():
         # TODO : Train in parallel, not sequentially (?)
         teachers = [device.model for device in self.devices]
         to_tensor = torchvision.transforms.ToTensor()
-        kd_dataset = datasets.Dataset.from_list(self.kd_dataset)
-        kd_dataset = kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True)
         ce_loss = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
         if self.optimizer_state_dict is not None:
             optimizer.load_state_dict(self.optimizer_state_dict)
         student.train() # Student to train mode
-        for epoch in range(epochs):
-            running_loss = 0.0
-            running_kd_loss = 0.0
-            running_ce_loss = 0.0
-            running_accuracy = 0.0
-            for batch in train_loader:
-                inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+        for teacher_idx, teacher in enumerate(teachers):
+            train_loader = torch.utils.data.DataLoader(self.kd_dataset[teacher_idx].map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, drop_last=True)
+            teacher.eval()
+            for epoch in range(epochs):
+                running_loss = 0.0
+                running_kd_loss = 0.0
+                running_ce_loss = 0.0
+                running_accuracy = 0.0
+                for batch in train_loader:
+                    inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+                    optimizer.zero_grad()
 
-                optimizer.zero_grad()
+                    # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
+                    with torch.no_grad():
+                        teacher_logits = teacher(inputs)
 
-                teacher_logits = []
-                # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
-                with torch.no_grad():
-                    # Keep the teacher logits for the soft targets
-                    for teacher in teachers:
-                        teacher.eval()  # Teacher set to evaluation mode
-                        if teacher.quantize:
-                            teacher = torch.quantization.convert(teacher)
-                        logits = teacher(inputs)
-                        teacher_logits.append(logits)
+                    # Forward pass with the student model
+                    student_logits = student(inputs)
 
-                # Forward pass with the student model
-                student_logits = student(inputs)
+                    #Soften the student logits by applying softmax first and log() second
+                    soft_targets = nn.functional.softmax(teacher_logits / T, dim=-1)
+                    soft_prob = nn.functional.log_softmax(student_logits / T, dim=-1)
 
-                # Soften the student logits by applying softmax first and log() second
-                # Compute the mean of the teacher logits received from all devices
-                # TODO: Does the mean make sense?
-                averaged_teacher_logits = torch.mean(torch.stack(teacher_logits), dim=0)
-                soft_targets = torch.nn.functional.softmax(averaged_teacher_logits / T, dim=-1)
-                soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
+                    # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
+                    soft_targets_loss = torch.sum(soft_targets * (soft_targets.log() - soft_prob)) / soft_prob.size()[0] * (T**2)
 
-                # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
-                soft_targets_loss = -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
+                    # Calculate the true label loss
+                    label_loss = ce_loss(student_logits, labels)
 
-                # Calculate the true label loss
-                label_loss = ce_loss(student_logits, labels)
+                    # Weighted sum of the two losses
+                    loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
 
-                # Weighted sum of the two losses
-                loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
-                loss.backward()
-                optimizer.step()
+                    loss.backward()
+                    optimizer.step()
+                    running_loss += loss.item()
+                    running_kd_loss += soft_targets_loss.item()
+                    running_ce_loss += label_loss.item()
+                    running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
 
-                running_loss += loss.item()
-                running_kd_loss += soft_targets_loss
-                running_ce_loss += label_loss
-                running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
-            print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)}), Accuracy: {running_accuracy / len(train_loader.dataset)}")
+                print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)}), Accuracy: {running_accuracy / len(train_loader.dataset)}")
+
         self.model = student
         self.model_state_dict = deepcopy(self.model.state_dict())
         self.optimizer_state_dict = deepcopy(optimizer.state_dict())
@@ -368,16 +360,18 @@ class User():
         self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
         return self
     
-    def create_kd_dataset(self, percentage_amount=1):
+    def create_kd_dataset(self, percentage_amount=0.3):
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
-        kd_dataset = []
-        for device in self.devices:
+        kd_dataset = [None for _ in range(len(self.devices))]
+        for device_idx, device in enumerate(self.devices):
             dataset = np.array(device.dataset)
             dataset_idxs = np.random.choice(a=dataset.shape[0], size=math.floor(percentage_amount*len(dataset)), replace=False)
-            kd_dataset = np.array([dataset[idx] for idx in dataset_idxs])
-        self.kd_dataset = datasets.Dataset.from_list(kd_dataset.tolist())
+            kd_dataset[device_idx] = datasets.Dataset.from_list([dataset[idx] for idx in dataset_idxs])
+        self.kd_dataset = kd_dataset
+        dataset_len = sum(len(kd_dataset[i]) for i in range(len(kd_dataset)))
+        print(f"{Style.GREEN}[INFO]{Style.RESET} Knowledge distillation dataset created with number of samples: {dataset_len}")
         return self
     
     def user_cluster_data(self, shrinkage_ratio):
