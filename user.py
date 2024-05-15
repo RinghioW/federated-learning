@@ -360,7 +360,7 @@ class User():
         self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
         return self
     
-    def create_kd_dataset(self, percentage_amount=0.3):
+    def create_kd_dataset(self, percentage_amount=0.1):
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
