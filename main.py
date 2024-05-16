@@ -30,7 +30,7 @@ def main():
     adapt = not args.adapt
 
     if not shuffle:
-        results_dir = "results/no_shuffle/"
+        results_dir = "results/no-shuffle/"
     else:
         results_dir = "results/final/"
 
