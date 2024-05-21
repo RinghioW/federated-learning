@@ -105,6 +105,19 @@ def main():
         # ShuffleFL step 4, 5
         server = server.send_adaptive_scaling_factor()
 
+        # Users change their available compute and memory 
+        configs = [{"id" : i,
+                    "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
+                    "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
+                    "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
+                    "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
+                    "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
+                    } for i in range(num_devices)]
+        
+        for user in users:
+            for device in user.devices:
+                device.config = configs[device.config["id"]]
+    
         # ShuffleFL step 6
         # Can be executed in parallel
         # n_cores = cpu_count()

@@ -321,7 +321,7 @@ class User():
         bounds = [(0.,1.)] * num_variables
         # If the sum is less than one, we can use same-device column as additional dataset
         # constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
-        constraints = [{'type': 'eq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
+        constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
         
         # Run the optimization
         current_transition_matrices = np.array(self.transition_matrices).flatten()
@@ -360,7 +360,7 @@ class User():
         self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
         return self
     
-    def create_kd_dataset(self, percentage_amount=0.1):
+    def create_kd_dataset(self, percentage_amount=0.5):
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
