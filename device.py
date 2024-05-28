@@ -96,7 +96,7 @@ class Device():
             # TODO : Confirm pruning
             for name, module in net.named_modules():
                 if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
-                    prune.ln_structured(module, name="weight", amount=net.prune, n=2, dim=0)
+                    prune.remove(module, name="weight", amount=net.prune, n=2, dim=0)
         self.model_state_dict = deepcopy(net.state_dict())
         self.optimizer_state_dict = deepcopy(optimizer.state_dict())
 
