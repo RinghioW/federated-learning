@@ -9,7 +9,7 @@ import torchvision
 import datasets
 from adaptivenet import AdaptiveNet
 from config import Style
-from sklearn.manifold import TSNE
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
 from copy import deepcopy
 class User():
@@ -48,7 +48,7 @@ class User():
     # Constructs a function s.t. device_model = f(user_model, device_resources, device_data_distribution)
     def adapt_model(self, model):
         self.model = model
-        for idx, device in enumerate(self.devices):
+        for device in self.devices:
             # If compute is low, better to quantize the network
             # If memory is low, better to prune the network
             # If communication is low, does not really matter as to the network
@@ -65,8 +65,6 @@ class User():
                 device.model = AdaptiveNet(pruning_factor=0.3)
             else:
                 device.model = AdaptiveNet(pruning_factor=0.)
-            self.devices[idx] = device
-        return self
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
@@ -75,6 +73,7 @@ class User():
             student.load_state_dict(self.model_state_dict)
 
         # TODO : Train in parallel, not sequentially (?)
+        print(f"Total length of the kd_dataset: {sum([len(kd_dataset) for kd_dataset in self.kd_dataset])}")
         teachers = [device.model for device in self.devices]
         to_tensor = torchvision.transforms.ToTensor()
         ce_loss = torch.nn.CrossEntropyLoss()
@@ -123,18 +122,14 @@ class User():
 
                 print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)}), Accuracy: {running_accuracy / len(train_loader.dataset)}")
 
-        self.model = student
         self.model_state_dict = deepcopy(self.model.state_dict())
         self.optimizer_state_dict = deepcopy(optimizer.state_dict())
-        return self
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
     def train_devices(self, epochs=5, verbose=True):
-        for device_idx, device in enumerate(self.devices):
+        for device in self.devices:
             device = device.train(epochs, verbose)
-            self.devices[device_idx] = device
-        return self
     
     def get_latencies(self, epochs):
         t_communication = [0.] * len(self.devices)
@@ -174,14 +169,11 @@ class User():
         receiver = self.devices[receiver_idx]
 
         # Sender removes some samples
-        sender, samples, clusters = sender.remove_data(cluster, percentage_amount)
+        samples, clusters = sender.remove_data(cluster, percentage_amount)
         # Receiver adds those samples
-        receiver = receiver.add_data(samples, clusters)
+        receiver.add_data(samples, clusters)
 
-        self.devices[sender_idx] = sender
-        self.devices[receiver_idx] = receiver
 
-        return self
     
     def mock_send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
         # Identify sender and receiver
@@ -189,13 +181,9 @@ class User():
         receiver = self.devices[receiver_idx]
 
         # Sender removes some samples
-        sender, clusters = sender.mock_remove_data(cluster, percentage_amount)
+        clusters = sender.mock_remove_data(cluster, percentage_amount)
         # Receiver adds those samples
-        receiver = receiver.mock_add_data(clusters)
-
-        self.devices[sender_idx] = sender
-        self.devices[receiver_idx] = receiver
-        return self
+        receiver.mock_add_data(clusters)
 
     def mock_get_data_imbalances(self):
         data_imbalances = []
@@ -240,7 +228,7 @@ class User():
                 for other_device_idx in range(len(transition_matrix[0])):
                     if other_device_idx != device_idx:
                         # Send data from cluster i to device j
-                        self = self.mock_send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
+                        self.mock_send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
 
         # Compute the latencies
         latencies = self.mock_get_latencies(transition_matrices)
@@ -257,21 +245,16 @@ class User():
                 for other_device_idx in range(len(transition_matrix[0])):
                     if other_device_idx != device_idx:
                         # Send data from cluster i to device j
-                        self = self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
-        return self
+                        self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
     # Function to implement the dimensionality reduction of the transition matrices
     # The data is embedded into a 2-dimensional space using t-SNE
     # The classes are then aggregated into k groups using k-means
     # Implements section 4.4 from ShuffleFL
     def reduce_dimensionality(self):
-        for idx, device in enumerate(self.devices):
-            device = device.cluster_data(self.shrinkage_ratio)
-            self.devices[idx] = device
-        return self
-    
-    def user_reduce_dimensionality(self):
-        self.user_cluster_data(self.shrinkage_ratio)
-        return self
+        
+        lda_estimator, kmeans_estimator = self.compute_centroids(self.shrinkage_ratio)
+        for device in self.devices:
+            device = device.cluster_data(lda_estimator, kmeans_estimator)
 
     # Function for optimizing equation 7 from ShuffleFL
     def optimize_transmission_matrices(self):
@@ -292,7 +275,6 @@ class User():
             for idx, device in enumerate(self.devices):
                 device.dataset_clusters = devices_dataset_clusters[idx]
                 device.num_transferred_samples = 0
-                self.devices[idx] = device
 
             # Compute the loss function
             # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
@@ -334,7 +316,6 @@ class User():
         if not result.success:
             print(f"{Style.RED}[ERROR]{Style.RESET} Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
         self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
-        return self
     
     # Compute the difference in capability of the user compared to last round
     # Implements Equation 8 from ShuffleFL 
@@ -349,7 +330,7 @@ class User():
         # Update the average power and bandwidth
         self.average_power = average_power
         self.average_bandwidth = average_bandwidth
-        return self
+    
     # Implements Equation 9 from ShuffleFL
     def compute_staleness_factor(self):
         # Compute the dataset size and number of transferred samples
@@ -358,7 +339,6 @@ class User():
 
         # Compute the staleness factor
         self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
-        return self
     
     def create_kd_dataset(self, percentage_amount=0.5):
         # Create the knowledge distillation dataset
@@ -370,28 +350,24 @@ class User():
             dataset_idxs = np.random.choice(a=dataset.shape[0], size=math.floor(percentage_amount*len(dataset)), replace=False)
             kd_dataset[device_idx] = datasets.Dataset.from_list([dataset[idx] for idx in dataset_idxs])
         self.kd_dataset = kd_dataset
-        dataset_len = sum(len(kd_dataset[i]) for i in range(len(kd_dataset)))
-        print(f"{Style.GREEN}[INFO]{Style.RESET} Knowledge distillation dataset created with number of samples: {dataset_len}")
-        return self
     
-    def user_cluster_data(self, shrinkage_ratio):
+    # TODO: this function should have as parameter the uplink rate of the device
+    # TODO: User should send the centroids to the users, as the entire dataset is no longer labeled
+    def compute_centroids(self, shrinkage_ratio):
         # Assemble the entire dataset from the devices
         dataset = np.array(self.devices[0].dataset)
         for device in self.devices[1:]:
-            dataset = np.append(dataset, device.dataset, axis=0)
+            # TODO : Amount depends on the device uplink rate
+            dataset = np.append(dataset, device.sample(0.1))
         dataset = datasets.Dataset.from_list(dataset.tolist())
+        features = np.array(dataset["img"]).reshape(len(dataset), -1)
+        labels = np.array(dataset["label"])
 
-        feature_space = np.array(dataset["img"]).reshape(len(dataset), -1)
-        feature_space_2D = TSNE(n_components=2).fit_transform(feature_space)
+        lda = LinearDiscriminantAnalysis(n_components=4).fit(features, labels)
+        feature_space = lda.transform(features)
         # Cluster datapoints to k classes using KMeans
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
-        dataset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
+        kmeans = KMeans(n_clusters=n_clusters).fit(feature_space)
 
-        # Assign the a partition clusters to the devices
-        idx = 0
-        for device_idx, device in enumerate(self.devices):
-            # Assign the cluster partition to the devices
-            device.dataset_clusters = dataset_clusters[idx:idx+len(device.dataset)]
-            idx+=len(device.dataset)
-            self.devices[device_idx] = device
-        return self
+        # Return the estimators
+        return lda, kmeans

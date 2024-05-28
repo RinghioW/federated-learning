@@ -8,6 +8,7 @@ from scipy.spatial.distance import jensenshannon
 import torchvision.transforms as transforms
 import datasets
 from copy import deepcopy
+from torch.nn.utils import prune
 class Device():
     def __init__(self, config, dataset, valset) -> None:
         self.config = config
@@ -90,10 +91,14 @@ class Device():
             epoch_acc = correct / total
             if verbose:
                 print(f"Device {self.config['id']} - Epoch {epoch+1}: loss {epoch_loss}, accuracy {epoch_acc}")
-        self.model = net
+        
+        if net.prune > 0:
+            # TODO : Confirm pruning
+            for name, module in net.named_modules():
+                if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
+                    prune.ln_structured(module, name="weight", amount=net.prune, n=2, dim=0)
         self.model_state_dict = deepcopy(net.state_dict())
         self.optimizer_state_dict = deepcopy(optimizer.state_dict())
-        return self
 
     # Mock functions are used to simulate the transfer of data between devices
     # Useful for optimization of the transmission matrices (and not the actual data transfer)
@@ -115,13 +120,10 @@ class Device():
         self.dataset_clusters = dataset_clusters
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount
-        return self, clusters
+        return clusters
     
     def mock_add_data(self, clusters):
-        dataset_clusters = self.dataset_clusters
-        dataset_clusters = np.append(dataset_clusters, clusters, axis=0)
-        self.dataset_clusters = dataset_clusters
-        return self
+        self.dataset_clusters = np.append(self.dataset_clusters, clusters, axis=0)
 
     # Used in the transfer function to send data to a different device
     # Remove data that matches the cluster and return it
@@ -151,7 +153,7 @@ class Device():
         self.dataset_clusters = dataset_clusters
         # Update the number of samples that have been sent
         self.num_transferred_samples += amount
-        return self, samples, clusters
+        return samples, clusters
 
     # Used in the transfer function to receive data from a different device
     def add_data(self, samples, clusters):
@@ -161,19 +163,19 @@ class Device():
         self.dataset = datasets.Dataset.from_list(dataset.tolist())
         self.dataset_clusters = np.append(self.dataset_clusters, clusters, axis=0)
         assert(len(self.dataset) == len(self.dataset_clusters))
-        return self
+    
+    # Function to sample a sub-dataset from the dataset
+    def sample(self, percentage) -> datasets.Dataset:
+        dataset = np.array(self.dataset)
+        amount = math.floor(percentage * len(dataset))
 
+        # Randomly sample the dataset
+        reduced_dataset = np.random.permutation(dataset)[:amount]
+        return reduced_dataset
 
-    # Assing each datapoint to a cluster
-    def cluster_data(self, shrinkage_ratio):
-        # Use t-SNE to embed the dataset into 2D space
-        # Aggregate only the features, not the labels
-        perplexity = 20
-        if len(self.dataset) < perplexity:
-            perplexity = len(self.dataset)
-        feature_space = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
-        feature_space_2D = TSNE(n_components=2, perplexity=perplexity).fit_transform(feature_space)
+    def cluster_data(self, lda_estimator, kmeans_estimator):
+        dataset = self.dataset
+        dataset = np.array(dataset["img"]).reshape(len(dataset), -1)
+        feature_space = lda_estimator.transform(dataset)
         # Cluster datapoints to k classes using KMeans
-        n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
-        self.dataset_clusters = KMeans(n_clusters).fit_predict(feature_space_2D)
-        return self
+        self.dataset_clusters = kmeans_estimator.predict(feature_space)

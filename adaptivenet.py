@@ -40,4 +40,6 @@ class AdaptiveNet(nn.Module):
         x = self.fc3(x)
         if self.quantize:
             x = self.dequant(x)
+        if self.pruining_factor > 0.:
+            x = prune.remove(x)
         return x

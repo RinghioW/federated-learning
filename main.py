@@ -138,7 +138,7 @@ def main():
             if adapt:
                 # User adapts the model for their devices
                 # ShuffleFL Novelty
-                user = user.adapt_model(server.model)
+                user.adapt_model(server.model)
             
             if shuffle:
                 # User measures the system latencies
@@ -149,23 +149,23 @@ def main():
 
                 # Reduce dimensionality of the transmission matrices
                 # ShuffleFL step 7, 8
-                user = user.user_reduce_dimensionality()
+                user.reduce_dimensionality()
                 
                 # User optimizes the transmission matrices
                 # ShuffleFL step 9
-                user = user.optimize_transmission_matrices()
+                user.optimize_transmission_matrices()
 
                 # User shuffles the data
                 # ShuffleFL step 10
-                user = user.shuffle_data(user.transition_matrices)
+                user.shuffle_data(user.transition_matrices)
 
             if adapt:
                 # User creates the knowledge distillation dataset
                 # ShuffleFL Novelty
-                user = user.create_kd_dataset()
+                user.create_kd_dataset()
 
                 # User updates parameters based on last iteration
-                user = user.update_average_capability()
+                user.update_average_capability()
 
             # User measures the system latencies
             latencies = user.get_latencies(epochs=on_device_epochs)
@@ -179,14 +179,13 @@ def main():
             obj_functions[user_idx].append(STD_CORRECTION*np.std(latencies) + np.max(latencies) + user.adaptive_scaling_factor*np.max(data_imbalances))
             # User trains devices
             # ShuffleFL step 11-15
-            user = user.train_devices(epochs=on_device_epochs, verbose=True)
+            user.train_devices(epochs=on_device_epochs, verbose=True)
 
             if adapt:
                 # User trains the model using knowledge distillation
                 # ShuffleFL step 16, 17
-                user = user.aggregate_updates()
+                user.aggregate_updates()
 
-            server.users[user_idx] = user
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
         server = server.aggregate_updates()
@@ -227,7 +226,7 @@ def train_user(server, user, user_idx, user_latency_history, user_data_imbalance
 
         # Reduce dimensionality of the transmission matrices
         # ShuffleFL step 7, 8
-        user = user.user_reduce_dimensionality()
+        user = user.reduce_dimensionality()
         
         # User optimizes the transmission matrices
         # ShuffleFL step 9
