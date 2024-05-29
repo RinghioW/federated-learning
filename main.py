@@ -68,10 +68,10 @@ def main():
 
     # Create devices and users
     devices = [Device(configs[i], trainsets[i*server_epochs], valsets[i*server_epochs]) for i in range(num_devices)]
-    for device in devices:
-        print(f"Device configurations:\n {device.config}")
     devices_grouped = np.array_split(devices, num_users)
-    users = [User(devices_grouped[i]) for i in range(num_users)]
+    users = [User(id=i, devices=devices_grouped[i]) for i in range(num_users)]
+    print(users)
+
     server = Server(dataset)
 
     time_start = time.time()
@@ -147,6 +147,7 @@ def main():
                 # User measures the data imbalance
                 data_imbalances = user.get_data_imbalances()
 
+                print(f"User before shuffling: {user}")
                 # Reduce dimensionality of the transmission matrices
                 # ShuffleFL step 7, 8
                 user.reduce_dimensionality()
@@ -155,9 +156,12 @@ def main():
                 # ShuffleFL step 9
                 user.optimize_transmission_matrices()
 
+
                 # User shuffles the data
                 # ShuffleFL step 10
                 user.shuffle_data(user.transition_matrices)
+
+                print(f"User after shuffling: {user}")
 
             if adapt:
                 # User creates the knowledge distillation dataset

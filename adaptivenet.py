@@ -10,6 +10,8 @@ class AdaptiveNet(nn.Module):
     def __init__(self, quantize=False, pruning_factor=0., low_rank=False):
         super(AdaptiveNet, self).__init__()
         self.quantize = quantize
+        self.low_rank = low_rank
+        self.pruning_factor = pruning_factor
         if quantize and pruning_factor > 0:
             raise ValueError("Cannot quantize a pruned network.")
         if quantize:
@@ -23,9 +25,11 @@ class AdaptiveNet(nn.Module):
         self.conv2 = nn.Conv2d(6, 16, 5)
         if pruning_factor > 0.:
             self.conv2 = prune.ln_structured(module=self.conv2, name="weight", amount=pruning_factor, n=2, dim=0)
+            self.conv2 = prune.remove(self.conv2, name="weight")
         self.fc1 = nn.Linear(16 * 5 * 5, 120)
         if pruning_factor > 0.:
             self.fc1 = prune.ln_structured(module=self.fc1, name="weight", amount=pruning_factor, n=2, dim=0)
+            self.fc1 = prune.remove(self.fc1, name="weight")
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 10)
     
@@ -40,6 +44,4 @@ class AdaptiveNet(nn.Module):
         x = self.fc3(x)
         if self.quantize:
             x = self.dequant(x)
-        if self.pruining_factor > 0.:
-            x = prune.remove(x)
         return x

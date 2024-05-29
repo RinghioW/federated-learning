@@ -13,7 +13,8 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
 from copy import deepcopy
 class User():
-    def __init__(self, devices, classes=NUM_CLASSES) -> None:
+    def __init__(self, id, devices, classes=NUM_CLASSES) -> None:
+        self.id = id
         self.devices = devices
         self.kd_dataset = []
         self.model = None
@@ -42,6 +43,8 @@ class User():
         self.average_power = 1. + random.random()
         self.average_bandwidth = 1. + random.random()
 
+    def __repr__(self) -> str:
+        return f"User(id: {self.id}, devices: {self.devices})"
 
     # Adapt the model to the devices
     # Implements the adaptation step from ShuffleFL Novelty
@@ -129,7 +132,7 @@ class User():
     # Steps 11-15 in the ShuffleFL Algorithm
     def train_devices(self, epochs=5, verbose=True):
         for device in self.devices:
-            device = device.train(epochs, verbose)
+            device.train(epochs, verbose)
     
     def get_latencies(self, epochs):
         t_communication = [0.] * len(self.devices)
@@ -340,25 +343,26 @@ class User():
         # Compute the staleness factor
         self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
     
-    def create_kd_dataset(self, percentage_amount=0.5):
+    def create_kd_dataset(self, percentage_amount=0.2):
         # Create the knowledge distillation dataset
         # The dataset is created by sampling from the devices
         # The dataset is then used to train the user model
-        kd_dataset = [None for _ in range(len(self.devices))]
-        for device_idx, device in enumerate(self.devices):
-            dataset = np.array(device.dataset)
-            dataset_idxs = np.random.choice(a=dataset.shape[0], size=math.floor(percentage_amount*len(dataset)), replace=False)
-            kd_dataset[device_idx] = datasets.Dataset.from_list([dataset[idx] for idx in dataset_idxs])
+        kd_dataset = [None] * len(self.devices)
+        for idx, device in enumerate(self.devices):
+            # TODO : Amount depends on the device uplink rate
+            kd_dataset[idx] = datasets.Dataset.from_list(device.sample(percentage_amount).tolist())
+
         self.kd_dataset = kd_dataset
+        print(f"Created knowledge distillation dataset with {sum([len(kd_dataset) for kd_dataset in self.kd_dataset])} samples.")
     
     # TODO: this function should have as parameter the uplink rate of the device
     # TODO: User should send the centroids to the users, as the entire dataset is no longer labeled
     def compute_centroids(self, shrinkage_ratio):
         # Assemble the entire dataset from the devices
-        dataset = np.array(self.devices[0].dataset)
-        for device in self.devices[1:]:
+        dataset = np.array([])
+        for device in self.devices:
             # TODO : Amount depends on the device uplink rate
-            dataset = np.append(dataset, device.sample(0.1))
+            dataset = np.append(arr=dataset, values=device.sample(0.1), axis=0)
         dataset = datasets.Dataset.from_list(dataset.tolist())
         features = np.array(dataset["img"]).reshape(len(dataset), -1)
         labels = np.array(dataset["label"])

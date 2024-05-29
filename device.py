@@ -25,7 +25,7 @@ class Device():
         self.num_transferred_samples = 0
 
     def __repr__(self) -> str:
-        return f"Device({self.config})"
+        return f"Device({self.config}, 'samples': {len(self.dataset)})"
 
     # Compute the JS divergence between the reference balanced distribution and the actual data distribution
     # Implements Equation 3 from ShuffleFL
@@ -60,6 +60,7 @@ class Device():
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs=10, verbose=False):
+        print(f"Device {self.config['id']} - Training on {len(self.dataset)} samples")
         if self.model is None or self.dataset is None:
             raise ValueError("Model or dataset is None.")
         net = self.model
@@ -92,11 +93,6 @@ class Device():
             if verbose:
                 print(f"Device {self.config['id']} - Epoch {epoch+1}: loss {epoch_loss}, accuracy {epoch_acc}")
         
-        if net.prune > 0:
-            # TODO : Confirm pruning
-            for name, module in net.named_modules():
-                if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
-                    prune.remove(module, name="weight", amount=net.prune, n=2, dim=0)
         self.model_state_dict = deepcopy(net.state_dict())
         self.optimizer_state_dict = deepcopy(optimizer.state_dict())
 
@@ -165,7 +161,8 @@ class Device():
         assert(len(self.dataset) == len(self.dataset_clusters))
     
     # Function to sample a sub-dataset from the dataset
-    def sample(self, percentage) -> datasets.Dataset:
+    def sample(self, percentage):
+        print(f"Device {self.config['id']} - Sampling {percentage * 100}% of the data: {math.floor(percentage * len(self.dataset))} samples")
         dataset = np.array(self.dataset)
         amount = math.floor(percentage * len(dataset))
 
