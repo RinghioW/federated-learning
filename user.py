@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import os
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
 import math
@@ -11,15 +12,13 @@ from adaptivenet import AdaptiveNet
 from config import Style
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
-from copy import deepcopy
+
 class User():
     def __init__(self, id, devices, classes=NUM_CLASSES) -> None:
         self.id = id
         self.devices = devices
         self.kd_dataset = []
         self.model = None
-        self.model_state_dict = None
-        self.optimizer_state_dict = None
 
         # SHUFFLE-FL
 
@@ -43,6 +42,9 @@ class User():
         self.average_power = 1. + random.random()
         self.average_bandwidth = 1. + random.random()
 
+        self.init = False
+
+
     def __repr__(self) -> str:
         return f"User(id: {self.id}, devices: {self.devices})"
 
@@ -56,37 +58,50 @@ class User():
             # If memory is low, better to prune the network
             # If communication is low, does not really matter as to the network
             # If energy is low, better to prune the network
+            device.model = model
+            device.path = f"checkpoints/user_{self.id}/"
             resources = device.config["compute"] + device.config["memory"] + device.config["energy_budget"]
             # Adaptation is based on the device resources
             if resources < 5:
-                device.model = AdaptiveNet(quantize=True)
-                device.model.qconfig = torch.quantization.default_qconfig
-                torch.quantization.prepare(device.model, inplace=True)
+                device.model_config = {"quantize": True, "pruning_factor": 0.}
             elif resources < 10:
-                device.model = AdaptiveNet(pruning_factor=0.5)
+                device.model_config = {"quantize": False, "pruning_factor": 0.5}
             elif resources < 20:
-                device.model = AdaptiveNet(pruning_factor=0.3)
+                device.model_config = {"quantize": False, "pruning_factor": 0.3}
             else:
-                device.model = AdaptiveNet(pruning_factor=0.)
+                device.model_config = {"quantize": False, "pruning_factor": 0.1}
 
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
-        student = self.model
-        if self.model_state_dict is not None:
-            student.load_state_dict(self.model_state_dict)
+
+        # Load the model and optimizer state dict
+        student = self.model()
+        optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
+        if self.init:
+            checkpoint = torch.load(f"checkpoints/user_{self.id}/user.pt")
+            student.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        else:
+            self.init = True
+
+        student.train()
 
         # TODO : Train in parallel, not sequentially (?)
         print(f"Total length of the kd_dataset: {sum([len(kd_dataset) for kd_dataset in self.kd_dataset])}")
-        teachers = [device.model for device in self.devices]
+
         to_tensor = torchvision.transforms.ToTensor()
         ce_loss = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
-        if self.optimizer_state_dict is not None:
-            optimizer.load_state_dict(self.optimizer_state_dict)
-        student.train() # Student to train mode
-        for teacher_idx, teacher in enumerate(teachers):
-            train_loader = torch.utils.data.DataLoader(self.kd_dataset[teacher_idx].map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, drop_last=True)
+        for device_idx, device in enumerate(self.devices):
+            # Load the teacher model
+            teacher = device.model(**device.model_config)
+            teacher_checkpoint = torch.load(f"checkpoints/user_{self.id}/device_{device.config['id']}.pt")
+            teacher.load_state_dict(teacher_checkpoint['model_state_dict'])
             teacher.eval()
+
+            # Load the kd_dataset for the device
+            train_loader = torch.utils.data.DataLoader(self.kd_dataset[device_idx].map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, drop_last=True)
+            
+            # Train
             for epoch in range(epochs):
                 running_loss = 0.0
                 running_kd_loss = 0.0
@@ -125,8 +140,8 @@ class User():
 
                 print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)}), Accuracy: {running_accuracy / len(train_loader.dataset)}")
 
-        self.model_state_dict = deepcopy(self.model.state_dict())
-        self.optimizer_state_dict = deepcopy(optimizer.state_dict())
+        # Save the model for checkpointing
+        torch.save({'model_state_dict': student.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, f"checkpoints/user_{self.id}/user.pt")
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm

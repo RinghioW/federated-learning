@@ -17,6 +17,8 @@ class AdaptiveNet(nn.Module):
         if quantize:
             self.quant = quantization.QuantStub()
             self.dequant = quantization.DeQuantStub()
+            self.qconfig = torch.quantization.default_qconfig
+            torch.quantization.prepare(self, inplace=True)
         if low_rank:
             # Figure out what to do here
             pass

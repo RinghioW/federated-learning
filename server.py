@@ -7,8 +7,7 @@ from config import Style
 class Server():
     def __init__(self, dataset):
         if dataset == "cifar10":
-            self.model = AdaptiveNet()
-            self.model_state_dict = None
+            self.model = AdaptiveNet
         else:
             # TODO: Add more datasets
             # Femnist, Shakespeare
@@ -16,21 +15,23 @@ class Server():
         self.users = None
         self.wall_clock_training_times = None
         self.scaling_factor = 10 ** 6
+        self.init = False
 
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient
     # Step 18 in the ShuffleFL algorithm
     # TODO: Use FedAvg instead of parameter averaging (aggregate the gradients instead of the weights)
     def aggregate_updates(self):
-        sum_weights = self.users[0].model_state_dict
+        sum_weights = torch.load(f"checkpoints/user_0/user.pt")['model_state_dict']
         for user in self.users[1:]:
-            for key in sum_weights:
-                sum_weights[key] += user.model_state_dict[key]
+            state_dict = torch.load(f"checkpoints/user_{user.id}/user.pt")['model_state_dict']
+            for key, val in state_dict.items():
+                sum_weights[key] += val
         for key in sum_weights:
             sum_weights[key] = type(sum_weights[key])(sum_weights[key] * (1/len(self.users)))
-        incompatible_keys = self.model.load_state_dict(sum_weights)
-        self.model_state_dict = deepcopy(self.model.state_dict())
-        return self
+
+        # Save the aggregated weights
+        torch.save({'model_state_dict': sum_weights}, "checkpoints/server/server.pt")
 
     # Evaluate the server model on the test set
     # TODO: Find a way to compare this evaluation to some other H-FL method
@@ -38,13 +39,17 @@ class Server():
         to_tensor = torchvision.transforms.ToTensor()
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)
-        net = self.model
-        if self.model_state_dict is not None:
-            net.load_state_dict(self.model_state_dict)
+        net = self.model()
+        if self.init:
+            checkpoint = torch.load("checkpoints/server/server.pt")
+            net.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self.init = True
+        net.eval()
+        
         """Evaluate the network on the entire test set."""
         criterion = torch.nn.CrossEntropyLoss()
         correct, total, loss = 0, 0, 0.0
-        net.eval()
         with torch.no_grad():
             for batch in testloader:
                 images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
@@ -68,8 +73,6 @@ class Server():
         # Compute adaptive scaling factor for each user
         for idx, user in enumerate(self.users):
             user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * self.scaling_factor
-            self.users[idx] = user
-        return self
 
     # Select users for the next round of training
     # TODO: Consider tier-based selection (TiFL) instead of random selection
@@ -77,4 +80,3 @@ class Server():
         # self.users = random.choices(users, k=math.floor(split*len(users)))
         self.users = users
         self.wall_clock_training_times = [1.] * len(self.users)
-        return self

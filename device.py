@@ -17,12 +17,12 @@ class Device():
         self.valset = valset
 
         self.model = None
-        self.model_state_dict = None
-        self.optimizer_state_dict = None
-
+        self.model_config = None
+        self.path = None
         self.dataset_clusters = None # For each sample, the cluster that the sample belongs to
 
         self.num_transferred_samples = 0
+        self.init = False
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
@@ -61,20 +61,25 @@ class Device():
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs=10, verbose=False):
         print(f"Device {self.config['id']} - Training on {len(self.dataset)} samples")
-        if self.model is None or self.dataset is None:
-            raise ValueError("Model or dataset is None.")
-        net = self.model
-        if self.model_state_dict is not None:
-            net.load_state_dict(self.model_state_dict)
+        # Load the model
+        net = self.model(**self.model_config)
+        optimizer = torch.optim.Adam(net.parameters())
+
+        if self.init:
+            checkpoint = torch.load(self.path + f"device_{self.config['id']}.pt")
+            net.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        else:
+            self.init = True
+        
+        net.train()
+
         to_tensor = transforms.ToTensor()
         dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
         """Train the network on the training set."""
         criterion = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(net.parameters())
-        if self.optimizer_state_dict is not None:
-            optimizer.load_state_dict(self.optimizer_state_dict)
-        net.train()
+
         for epoch in range(epochs):
             correct, total, epoch_loss = 0, 0, 0.0
             for batch in trainloader:
@@ -92,9 +97,12 @@ class Device():
             epoch_acc = correct / total
             if verbose:
                 print(f"Device {self.config['id']} - Epoch {epoch+1}: loss {epoch_loss}, accuracy {epoch_acc}")
-        
-        self.model_state_dict = deepcopy(net.state_dict())
-        self.optimizer_state_dict = deepcopy(optimizer.state_dict())
+
+        # Save the model
+        torch.save({
+            'model_state_dict': net.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict()
+        }, self.path + f"device_{self.config['id']}.pt")
 
     # Mock functions are used to simulate the transfer of data between devices
     # Useful for optimization of the transmission matrices (and not the actual data transfer)

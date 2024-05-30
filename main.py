@@ -7,8 +7,10 @@ from server import Server
 from config import Style, STD_CORRECTION
 from joblib import Parallel, delayed, cpu_count
 from plots import plot_results
+import os
 
 def main():
+
     # Define arguments
     parser = argparse.ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch.")
     print(parser.description)
@@ -88,7 +90,7 @@ def main():
     accuracies = []
     accuracies.append(initial_accuracy)
     
-    server = server.select_users(users, split=1.0)
+    server.select_users(users, split=1.0)
 
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
@@ -103,7 +105,7 @@ def main():
         # Users report the staleness factor to the server, and
         # The server sends the adaptive scaling factor to the users
         # ShuffleFL step 4, 5
-        server = server.send_adaptive_scaling_factor()
+        server.send_adaptive_scaling_factor()
 
         # Users change their available compute and memory 
         configs = [{"id" : i,
@@ -192,7 +194,7 @@ def main():
 
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
-        server = server.aggregate_updates()
+        server.aggregate_updates()
         
         # Server evaluates the model
         loss, accuracy = server.evaluate(testset)
