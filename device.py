@@ -11,18 +11,18 @@ from copy import deepcopy
 from torch.nn.utils import prune
 class Device():
     def __init__(self, config, dataset, valset) -> None:
-        self.config = config
+        self.config = config # Configuration of the device
         self.dataset = dataset
 
-        self.valset = valset
+        self.valset = valset # TODO: Figure out how to use this
 
-        self.model = None
-        self.model_config = None
-        self.path = None
+        self.model = None # Model class (NOT instance)
+        self.model_params = None # Configuration to pass to the model constructor
+        self.path = None # Relative path to save the model
         self.dataset_clusters = None # For each sample, the cluster that the sample belongs to
 
         self.num_transferred_samples = 0
-        self.init = False
+        self.init = False # Useful to figure out whether we have a checkpoint or not
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
@@ -62,7 +62,7 @@ class Device():
     def train(self, epochs=10, verbose=False):
         print(f"Device {self.config['id']} - Training on {len(self.dataset)} samples")
         # Load the model
-        net = self.model(**self.model_config)
+        net = self.model(**self.model_params)
         optimizer = torch.optim.Adam(net.parameters())
 
         if self.init:

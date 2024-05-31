@@ -73,6 +73,20 @@ def main():
     devices_grouped = np.array_split(devices, num_users)
     users = [User(id=i, devices=devices_grouped[i]) for i in range(num_users)]
     print(users)
+            
+            
+    # Users change their available compute and memory 
+    configs = [{"id" : i,
+                "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
+                "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
+                "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
+                "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
+                "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
+                } for i in range(num_devices)]
+    
+    for user in users:
+        for device in user.devices:
+            device.config = configs[device.config["id"]]
 
     server = Server(dataset)
 
@@ -107,19 +121,6 @@ def main():
         # ShuffleFL step 4, 5
         server.send_adaptive_scaling_factor()
 
-        # Users change their available compute and memory 
-        configs = [{"id" : i,
-                    "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
-                    "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
-                    "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
-                    "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
-                    "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
-                    } for i in range(num_devices)]
-        
-        for user in users:
-            for device in user.devices:
-                device.config = configs[device.config["id"]]
-    
         # ShuffleFL step 6
         # Can be executed in parallel
         # n_cores = cpu_count()
@@ -202,6 +203,15 @@ def main():
         losses.append(loss)
         accuracies.append(accuracy)
 
+        # Users change their available compute and memory 
+        configs = [{"id" : i,
+                    "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
+                    "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
+                    "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
+                    "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
+                    "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
+                    } for i in range(num_devices)]
+        
         # Update the data on the devices
         for user_idx, user in enumerate(server.users):
             for device_idx, device in enumerate(user.devices):
@@ -209,8 +219,8 @@ def main():
                 device.dataset = trainsets[idx*server_epochs + epoch]
                 device.valset = valsets[idx*server_epochs + epoch]
                 user.devices[device_idx] = device
-            server.users[user_idx] = user
-            
+                device.config = configs[device.config["id"]]
+
     # Save the results
     plot_results(results_dir, num_users, latency_histories, data_imbalance_histories, obj_functions, losses, accuracies)
 
