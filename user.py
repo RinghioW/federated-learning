@@ -12,9 +12,11 @@ from adaptivenet import AdaptiveNet
 from config import Style
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
+from plots import plot_optimization
+import pymoo
 
 class User():
-    def __init__(self, id, devices, classes=NUM_CLASSES) -> None:
+    def __init__(self, id, devices, classespython=NUM_CLASSES) -> None:
         self.id = id
         self.devices = devices
         self.kd_dataset: datasets.Dataset = None
@@ -62,15 +64,16 @@ class User():
             device.path = f"checkpoints/user_{self.id}/"
             resources = device.config["compute"] + device.config["memory"] + device.config["energy_budget"]
             # Adaptation is based on the device resources
-            if resources < 5:
-                device.model_params = {"quantize": True, "pruning_factor": 0.}
-            elif resources < 10:
-                device.model_params = {"quantize": False, "pruning_factor": 0.5}
-            elif resources < 20:
-                device.model_params = {"quantize": False, "pruning_factor": 0.3}
-            else:
-                device.model_params = {"quantize": False, "pruning_factor": 0.1}
-
+            # if resources < 5:
+            #     device.model_params = {"quantize": True, "pruning_factor": 0.}
+            # elif resources < 10:
+            #     device.model_params = {"quantize": False, "pruning_factor": 0.5}
+            # elif resources < 20:
+            #     device.model_params = {"quantize": False, "pruning_factor": 0.3}
+            # else:
+            #     device.model_params = {"quantize": False, "pruning_factor": 0.1}
+            # TODO: fix this
+            device.model_params = {"quantize": False, "pruning_factor": 0.}
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model()
@@ -272,16 +275,21 @@ class User():
     # The classes are then aggregated into k groups using k-means
     # Implements section 4.4 from ShuffleFL
     def reduce_dimensionality(self):
-        
         lda_estimator, kmeans_estimator = self.compute_centroids(self.shrinkage_ratio)
         for device in self.devices:
             device = device.cluster_data(lda_estimator, kmeans_estimator)
 
     # Function for optimizing equation 7 from ShuffleFL
-    def optimize_transmission_matrices(self):
+    def optimize_transmission_matrices(self, epoch, trace=True):
         # Define the objective function to optimize
         # Takes as an input the transfer matrices
         # Returns as an output the result of Equation 7
+
+        if trace:
+            di_history = []
+            sl_history = []
+            obj_fun_history = []
+
         def objective_function(x):
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
@@ -304,6 +312,13 @@ class User():
             system_latency = STD_CORRECTION*np.std(latencies) + np.max(latencies)
             data_imbalance = self.adaptive_scaling_factor*np.max(data_imbalances)
             obj_func = system_latency + data_imbalance
+
+            if trace:
+                di_history.append(data_imbalance)
+                sl_history.append(system_latency)
+                obj_fun_history.append(obj_func)
+
+            # Save the objective function for plotting
             return obj_func
 
         # Define the constraints for the optimization
@@ -324,7 +339,7 @@ class User():
         bounds = [(0.,1.)] * num_variables
         # If the sum is less than one, we can use same-device column as additional dataset
         # constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
-        constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
+        constraints = [{'type': 'eq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
         
         # Run the optimization
         current_transition_matrices = np.array(self.transition_matrices).flatten()
@@ -336,6 +351,11 @@ class User():
         # Update the transition matrices
         if not result.success:
             print(f"{Style.RED}[ERROR]{Style.RESET} Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
+        
+        # Save the trace
+        if trace:
+            plot_optimization(self.id, epoch, di_history, sl_history, obj_fun_history)
+
         self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
     
     # Compute the difference in capability of the user compared to last round

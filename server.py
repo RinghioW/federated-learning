@@ -14,7 +14,7 @@ class Server():
             raise ValueError(f"Invalid dataset. Please choose from valid datasets")
         self.users = None
         self.wall_clock_training_times = None
-        self.scaling_factor = 10 ** 6
+        self.scaling_factor = 10 ** 5
         self.init = False
 
     # Aggregate the updates from the users

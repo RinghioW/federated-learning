@@ -39,3 +39,25 @@ def plot_results(results_dir, num_users, latency_histories, data_imbalance_histo
     plt.ylabel("Accuracy")
     plt.savefig(results_dir + "accuracy_history.png")
     plt.close()
+
+def plot_optimization(user_idx, epoch, di_history, sl_history, obj_fun_history):
+    plt.plot(di_history)
+    plt.title(f"Data Imbalance History for User {user_idx} - Epoch {epoch}")
+    plt.xlabel("Iteration")
+    plt.ylabel("Data Imbalance")
+    plt.savefig(f"results/user_{user_idx}/data_imbalance_epoch_{epoch}.png")
+    plt.close()
+
+    plt.plot(sl_history)
+    plt.title(f"System Latency History for User {user_idx} - Epoch {epoch}")
+    plt.xlabel("Iteration")
+    plt.ylabel("Scaling Factor")
+    plt.savefig(f"results/user_{user_idx}/system_latency_epoch_{epoch}.png")
+    plt.close()
+
+    plt.plot(obj_fun_history)
+    plt.title(f"Objective Function History for User {user_idx} - Epoch {epoch}")
+    plt.xlabel("Iteration")
+    plt.ylabel("Objective Function")
+    plt.savefig(f"results/user_{user_idx}/objective_function_history_{epoch}.png")
+    plt.close()
