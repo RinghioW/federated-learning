@@ -93,16 +93,15 @@ def main():
     time_start = time.time()
     
     # Evaluate the server model before training
-    print(f"{Style.YELLOW}Evaluating server model before training...{Style.RESET}")
-    initial_loss, initial_accuracy = server.evaluate(testset)
-    print(f"{Style.YELLOW}Initial Loss: {initial_loss}, Initial Accuracy: {initial_accuracy}{Style.RESET}")
+    losses = []
+    accuracies = []
+    initial_loss, initial_accuracy = server.test(testset)
+    losses.append(initial_loss)
+    accuracies.append(initial_accuracy)
+    
     latency_histories = [[] for _ in range(num_users)]
     data_imbalance_histories = [[] for _ in range(num_users)]
     obj_functions = [[] for _ in range(num_users)]
-    losses = []
-    losses.append(initial_loss)
-    accuracies = []
-    accuracies.append(initial_accuracy)
     
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
@@ -112,7 +111,7 @@ def main():
 
         # Server performs selection of the users
         # ShuffleFL step 3
-        server.select_users(split=1.0)
+        server.select(users, split=1.0)
 
         # Users report the staleness factor to the server, and
         # The server sends the adaptive scaling factor to the users
@@ -126,26 +125,18 @@ def main():
                 user.adapt_model(server.model)
             
             if shuffle:
-                # User measures the system latencies
-                latencies = user.get_latencies(epochs=on_device_epochs)
-
-                # User measures the data imbalance
-                data_imbalances = user.get_data_imbalances()
-
                 print(f"User before shuffling: {user}")
                 # Reduce dimensionality of the transmission matrices
                 # ShuffleFL step 7, 8
                 user.reduce_dimensionality()
-                
+
                 # User optimizes the transmission matrices
                 # ShuffleFL step 9
                 user.optimize_transmission_matrices(epoch=epoch)
 
-
                 # User shuffles the data
                 # ShuffleFL step 10
-                user.shuffle_data(user.transition_matrices)
-
+                user.shuffle()
                 print(f"User after shuffling: {user}")
 
             if adapt:
@@ -156,31 +147,16 @@ def main():
                 # User updates parameters based on last iteration
                 user.update_average_capability()
 
-            # User measures the system latencies
-            latencies = user.get_latencies(epochs=on_device_epochs)
-            # total_time += sum(latencies)
-            latency_histories[user_idx].append(max(latencies))
-
-            # User measures the data imbalance
-            data_imbalances = user.get_data_imbalances()
-            data_imbalance_histories[user_idx].append(max(data_imbalances))
-
-            obj_functions[user_idx].append(STD_CORRECTION*np.std(latencies) + np.max(latencies) + user.adaptive_scaling_factor*np.max(data_imbalances))
             # User trains devices
             # ShuffleFL step 11-15
-            user.train_devices(epochs=on_device_epochs, verbose=True)
-
-            if adapt:
-                # User trains the model using knowledge distillation
-                # ShuffleFL step 16, 17
-                user.aggregate_updates()
+            user.train(epochs=on_device_epochs, verbose=True)
 
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
-        server.aggregate_updates()
+        server.train()
         
         # Server evaluates the model
-        loss, accuracy = server.evaluate(testset)
+        loss, accuracy = server.test(testset)
         print(f"{Style.YELLOW}SERVER :{Style.RESET} Loss: {loss}, Accuracy: {accuracy}")
         losses.append(loss)
         accuracies.append(accuracy)
@@ -195,7 +171,7 @@ def main():
                     } for i in range(num_devices)]
         
         # Update the data on the devices
-        for user_idx, user in enumerate(server.users):
+        for user_idx, user in enumerate(users):
             for device_idx, device in enumerate(user.devices):
                 idx = user_idx*num_devices//num_users + device_idx
                 device.dataset = trainsets[idx*server_epochs + epoch]
@@ -208,58 +184,6 @@ def main():
 
     time_end = time.time()
     print(f"Elapsed time: {time_end - time_start} seconds.")
-
-def train_user(server, user, user_idx, user_latency_history, user_data_imbalance_history, on_device_epochs, adapt, shuffle):
-    if adapt:
-        # User adapts the model for their devices
-        # ShuffleFL Novelty
-        user = user.adapt_model(server.model)
-    
-    if shuffle:
-        # User measures the system latencies
-        latencies = user.get_latencies(epochs=on_device_epochs)
-
-        # User measures the data imbalance
-        data_imbalances = user.get_data_imbalances()
-
-        # Reduce dimensionality of the transmission matrices
-        # ShuffleFL step 7, 8
-        user = user.reduce_dimensionality()
-        
-        # User optimizes the transmission matrices
-        # ShuffleFL step 9
-        user = user.optimize_transmission_matrices()
-
-        # User shuffles the data
-        # ShuffleFL step 10
-        user = user.shuffle_data(user.transition_matrices)
-
-    if adapt:
-        # User creates the knowledge distillation dataset
-        # ShuffleFL Novelty
-        user = user.create_kd_dataset()
-
-        # User updates parameters based on last iteration
-        user = user.update_average_capability()
-
-    # User measures the system latencies
-    latencies = user.get_latencies(epochs=on_device_epochs)
-    # total_time += sum(latencies)
-    user_latency_history.append(max(latencies))
-
-    # User measures the data imbalance
-    data_imbalances = user.get_data_imbalances()
-    user_data_imbalance_history.append(max(data_imbalances))
-
-    # User trains devices
-    # ShuffleFL step 11-15
-    user = user.train_devices(epochs=on_device_epochs, verbose=True)
-
-    if adapt:
-        # User trains the model using knowledge distillation
-        # ShuffleFL step 16, 17
-        user = user.aggregate_updates()
-    return user, user_latency_history, user_data_imbalance_history
 
 if __name__ == "__main__":
     main()

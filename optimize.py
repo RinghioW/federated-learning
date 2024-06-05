@@ -1,5 +1,4 @@
 from metrics import data_imbalances, latencies
-from copy import deepcopy
 import math
 # A dataset cluster is an array of sample classes
 # It's needed to compute data imbalance and optimize the data shuffling

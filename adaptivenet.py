@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
+import optimum.quanto as quanto
 
 # Simple CNN that supports quantization (PTQ), pruning and low-rank adaption
 # Built for CIFAR-10 dataset (3x32x32)
@@ -30,7 +31,7 @@ class AdaptiveNet(nn.Module):
         self.fc3 = nn.Linear(84, 10)
 
         if quantize:
-            self = torch.ao.quantization.quantize_dynamic(self, {torch.nn.Linear, torch.nn.Conv2d}, dtype=torch.qint8)
+            quanto.quantize(self, weights=quanto.qint8)
     
     
     def forward(self, x):

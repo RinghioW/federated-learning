@@ -2,8 +2,6 @@ import torch
 from config import DEVICE
 import torchvision
 from adaptivenet import AdaptiveNet
-from copy import deepcopy
-from config import Style
 class Server():
     def __init__(self, dataset):
         if dataset == "cifar10":
@@ -21,7 +19,7 @@ class Server():
     # In this case, averaging the weights will be sufficient
     # Step 18 in the ShuffleFL algorithm
     # TODO: Use FedAvg instead of parameter averaging (aggregate the gradients instead of the weights)
-    def aggregate_updates(self):
+    def train(self):
         sum_weights = torch.load(f"checkpoints/user_0/user.pt")['model_state_dict']
         for user in self.users[1:]:
             state_dict = torch.load(f"checkpoints/user_{user.id}/user.pt")['model_state_dict']
@@ -35,7 +33,7 @@ class Server():
 
     # Evaluate the server model on the test set
     # TODO: Find a way to compare this evaluation to some other H-FL method
-    def evaluate(self, testset):
+    def test(self, testset):
         to_tensor = torchvision.transforms.ToTensor()
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)
@@ -76,7 +74,7 @@ class Server():
 
     # Select users for the next round of training
     # TODO: Consider tier-based selection (TiFL) instead of random selection
-    def select_users(self, users, split=1.):
+    def select(self, users, split=1.):
         # self.users = random.choices(users, k=math.floor(split*len(users)))
         self.users = users
         self.wall_clock_training_times = [1.] * len(self.users)

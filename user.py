@@ -13,7 +13,7 @@ from sklearn.cluster import KMeans
 from plots import plot_optimization
 from optimize import shuffle_metrics
 from metrics import staleness_factor
-
+from shuffle import shuffle_data
 class User():
     def __init__(self, id, devices, classes=NUM_CLASSES) -> None:
         self.id = id
@@ -150,40 +150,32 @@ class User():
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
     def train(self, epochs=5, verbose=True):
-        # On-device training
+        # Adapt the model
+        pass
+    
+        # Train the devices
         for device in self.devices:
             device.train(epochs, verbose)
         
         # Aggregate the updates
         self._aggregate_updates()
 
-    def _send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
-        # Identify sender and receiver
-        sender = self.devices[sender_idx]
-        receiver = self.devices[receiver_idx]
-
-        # Sender removes some samples
-        samples, clusters = sender.remove_data(cluster, percentage_amount)
-        # Receiver adds those samples
-        receiver.add_data(samples, clusters)
-
-
-    # Shuffle data between devices according to the transition matrices
-    # Implements the transformation described by Equation 1 from ShuffleFL
-    def _shuffle_data(self, transition_matrices):
-        # Each device sends data according to the respective transition matrix
-        for device_idx, transition_matrix in enumerate(transition_matrices):
-            for cluster_idx in range(len(transition_matrix)):
-                for other_device_idx in range(len(transition_matrix[0])):
-                    if other_device_idx != device_idx:
-                        # Send data from cluster i to device j
-                        self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
-
     # Implements section 4.4 from ShuffleFL
     def reduce_dimensionality(self):
         lda_estimator, kmeans_estimator = self.compute_centroids(self.shrinkage_ratio)
         for device in self.devices:
             device = device.cluster_data(lda_estimator, kmeans_estimator)
+
+    def shuffle(self):
+        # Shuffle the data and update the transition matrices
+        # Implements Equation 1 from ShuffleFL
+        datasets = [device.dataset for device in self.devices]
+        clusters = [device.labels for device in self.devices]
+        dataset_distributions = [device.dataset_distribution() for device in self.devices]
+        datasets, clusters = shuffle_data(datasets, clusters, dataset_distributions, self.transition_matrices)
+        for device, dataset, cluster in zip(self.devices, datasets, clusters):
+            device.dataset = dataset
+            device.clusters = cluster
 
     # Function for optimizing equation 7 from ShuffleFL
     def optimize_transmission_matrices(self, epoch, trace=True):
@@ -309,5 +301,10 @@ class User():
         dataset = np.array([])
         for device in self.devices:
             dataset = np.append(arr=dataset, values=device.sample(percentage), axis=0)
-        dataset = datasets.Dataset.from_list(dataset.tolist())
+        return datasets.Dataset.from_list(dataset.tolist())
 
+    def measure_latencies():
+        pass
+
+    def measure_data_imbalances():
+        pass
