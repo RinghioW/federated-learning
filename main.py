@@ -17,8 +17,8 @@ def main():
     parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices (default: 6)")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs (default: 2)")
-    parser.add_argument("--no-shuffle", dest="shuffle", type=bool, default=False, help="Enable data shuffling")
-    parser.add_argument("--no-adapt", dest="adapt", type=bool, default=False, help="Enable model adaptation")
+    parser.add_argument("--shuffle", dest="shuffle", type=bool, default=True, help="Enable data shuffling")
+    parser.add_argument("--adapt", dest="adapt", type=bool, default=True, help="Enable model adaptation")
 
     # Parse arguments
     args = parser.parse_args()
@@ -26,8 +26,8 @@ def main():
     num_devices = args.devices
     dataset = args.dataset
     server_epochs = args.epochs
-    shuffle = not args.shuffle
-    adapt = not args.adapt
+    shuffle = args.shuffle
+    adapt = args.adapt
 
     if not shuffle:
         results_dir = "results/no-shuffle/"
