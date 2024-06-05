@@ -29,7 +29,7 @@ class Server():
                 sum_weights[key] += val
         for key in sum_weights:
             sum_weights[key] = type(sum_weights[key])(sum_weights[key] * (1/len(self.users)))
-
+        
         # Save the aggregated weights
         torch.save({'model_state_dict': sum_weights}, "checkpoints/server/server.pt")
 

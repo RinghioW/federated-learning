@@ -1,19 +1,18 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import os
 from config import DEVICE, NUM_CLASSES, STD_CORRECTION
 from scipy.optimize import minimize
 import math
 import random
 import torchvision
 import datasets
-from adaptivenet import AdaptiveNet
 from config import Style
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
 from plots import plot_optimization
-from copy import deepcopy
+from optimize import shuffle_metrics
+from metrics import staleness_factor
 
 class User():
     def __init__(self, id, devices, classes=NUM_CLASSES) -> None:
@@ -72,8 +71,9 @@ class User():
                 device.model_params = {"quantize": False, "pruning_factor": 0.3}
             else:
                 device.model_params = {"quantize": False, "pruning_factor": 0.1}
+    
     # Train the user model using knowledge distillation
-    def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
+    def _aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
         if self.init:
@@ -149,43 +149,15 @@ class User():
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
-    def train_devices(self, epochs=5, verbose=True):
+    def train(self, epochs=5, verbose=True):
+        # On-device training
         for device in self.devices:
             device.train(epochs, verbose)
-    
-    def get_latencies(self, epochs):
-        t_communication = [0.] * len(self.devices)
-        t_computation = [0.] * len(self.devices)
-        latencies = [0.] * len(self.devices)
         
-        # For each device, compute communication and computation time
-        for device_idx, device in enumerate(self.devices):
-            transition_matrix = self.transition_matrices[device_idx]
-            # Compute the communication time
-            for data_class_idx, _ in enumerate(transition_matrix):
-                for other_device_idx, other_device in enumerate(self.devices):
-                    other_transition_matrix = self.transition_matrices[other_device_idx]
-                    if device_idx != other_device_idx:
-                        # Transmitting
-                        num_transmitted_samples = len(device.dataset) * transition_matrix[data_class_idx][other_device_idx]
-                        t_communication[device_idx] += num_transmitted_samples * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
-                        # Receiving
-                        num_received_samples = len(other_device.dataset) * other_transition_matrix[data_class_idx][device_idx]
-                        t_communication[device_idx] += num_received_samples * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
-            # Compute the computation time
-            t_computation[device_idx] += 3 * epochs * len(device.dataset) * device.config["compute"]
-            
-            # Compute the latency as the sum of both
-            latencies[device_idx] = t_communication[device_idx] + t_computation[device_idx]
-        return latencies
-    
-    def get_data_imbalances(self):
-        data_imbalances = []
-        for device in self.devices:
-            data_imbalances.append(device.data_imbalance())
-        return data_imbalances
-    
-    def send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
+        # Aggregate the updates
+        self._aggregate_updates()
+
+    def _send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
         # Identify sender and receiver
         sender = self.devices[sender_idx]
         receiver = self.devices[receiver_idx]
@@ -196,71 +168,9 @@ class User():
         receiver.add_data(samples, clusters)
 
 
-    
-    def mock_send_data(self, sender_idx, receiver_idx, cluster, percentage_amount):
-        # Identify sender and receiver
-        sender = self.devices[sender_idx]
-        receiver = self.devices[receiver_idx]
-
-        # Sender removes some samples
-        clusters = sender.mock_remove_data(cluster, percentage_amount)
-        # Receiver adds those samples
-        receiver.mock_add_data(clusters)
-
-    def mock_get_data_imbalances(self):
-        data_imbalances = []
-        for device in self.devices:
-            data_imbalances.append(device.mock_data_imbalance())
-        return data_imbalances
-    
-    def mock_get_latencies(self, transition_matrices):
-        t_communication = [0.] * len(self.devices)
-        t_computation = [0.] * len(self.devices)
-        latencies = [0.] * len(self.devices)
-        
-        # For each device, compute communication and computation time
-        for device_idx, device in enumerate(self.devices):
-            transition_matrix = transition_matrices[device_idx]
-            # Compute the communication time
-            for data_class_idx, _ in enumerate(transition_matrix):
-                for other_device_idx, other_device in enumerate(self.devices):
-                    other_transition_matrix = transition_matrices[other_device_idx]
-                    if device_idx != other_device_idx:
-                        # Transmitting
-                        num_transmitted_samples = len(device.dataset_clusters) * transition_matrix[data_class_idx][other_device_idx]
-                        t_communication[device_idx] += num_transmitted_samples * ((1/device.config["uplink_rate"]) + (1/other_device.config["downlink_rate"]))
-                        # Receiving
-                        num_received_samples = len(other_device.dataset_clusters) * other_transition_matrix[data_class_idx][device_idx]
-                        t_communication[device_idx] += num_received_samples * ((1/device.config["downlink_rate"]) + (1/other_device.config["uplink_rate"]))
-            # Compute the computation time
-            t_computation[device_idx] += 3 * len(device.dataset_clusters) * device.config["compute"]
-            
-            # Compute the latency as the sum of both
-            latencies[device_idx] = t_communication[device_idx] + t_computation[device_idx]
-        return latencies
-    
-
-
-    # Mock function to shuffle data between devices
-    # Only use the dataset_clusters to simulate the data shuffling
-    # Does not actually send the data
-    def mock_shuffle_data(self, transition_matrices):
-        for device_idx, transition_matrix in enumerate(transition_matrices):
-            for cluster_idx in range(len(transition_matrix)):
-                for other_device_idx in range(len(transition_matrix[0])):
-                    if other_device_idx != device_idx:
-                        # Send data from cluster i to device j
-                        self.mock_send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
-
-        # Compute the latencies
-        latencies = self.mock_get_latencies(transition_matrices)
-        # Compute the data imbalances
-        data_imbalances = self.mock_get_data_imbalances()
-        return latencies, data_imbalances
-
     # Shuffle data between devices according to the transition matrices
     # Implements the transformation described by Equation 1 from ShuffleFL
-    def shuffle_data(self, transition_matrices):
+    def _shuffle_data(self, transition_matrices):
         # Each device sends data according to the respective transition matrix
         for device_idx, transition_matrix in enumerate(transition_matrices):
             for cluster_idx in range(len(transition_matrix)):
@@ -268,9 +178,7 @@ class User():
                     if other_device_idx != device_idx:
                         # Send data from cluster i to device j
                         self.send_data(sender_idx=device_idx, receiver_idx=other_device_idx, cluster=cluster_idx, percentage_amount=transition_matrix[cluster_idx][other_device_idx])
-    # Function to implement the dimensionality reduction of the transition matrices
-    # The data is embedded into a 2-dimensional space using t-SNE
-    # The classes are then aggregated into k groups using k-means
+
     # Implements section 4.4 from ShuffleFL
     def reduce_dimensionality(self):
         lda_estimator, kmeans_estimator = self.compute_centroids(self.shrinkage_ratio)
@@ -283,6 +191,12 @@ class User():
         # Takes as an input the transfer matrices
         # Returns as an output the result of Equation 7
 
+        # Compute the dataset clusters for each device
+        dataset_distributions = [device.dataset_distribution() for device in self.devices]
+        uplinks = [device.config["uplink_rate"] for device in self.devices]
+        downlinks = [device.config["downlink_rate"] for device in self.devices]
+        computes = [device.config["compute"] for device in self.devices]
+
         if trace:
             di_history = []
             sl_history = []
@@ -291,11 +205,9 @@ class User():
         def objective_function(x):
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
-            
-            mock_user = deepcopy(self)
                 
             # Simulate the transferring of the data according to the matrices
-            latencies, data_imbalances = mock_user.mock_shuffle_data(transfer_matrices)
+            latencies, data_imbalances = shuffle_metrics(uplinks, downlinks, computes, transfer_matrices, dataset_distributions)
 
             # Compute the loss function
             # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
@@ -340,6 +252,7 @@ class User():
                           method='SLSQP', bounds=bounds,
                           constraints=constraints,
                           options={'maxiter': 50, 'ftol': 1e-01, 'eps': 1e-01})
+        
         # Update the transition matrices
         if not result.success:
             print(f"{Style.RED}[ERROR]{Style.RESET} Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
@@ -366,34 +279,20 @@ class User():
     
     # Implements Equation 9 from ShuffleFL
     def compute_staleness_factor(self):
-        # Compute the dataset size and number of transferred samples
         dataset_size = sum([len(device.dataset) for device in self.devices])
+        # TODO : Self should probably keep track of this
         num_transferred_samples = sum([device.num_transferred_samples for device in self.devices])
 
         # Compute the staleness factor
-        self.staleness_factor = (3 * dataset_size) / ((3 * dataset_size) + num_transferred_samples)
+        self.staleness_factor = staleness_factor(dataset_size, num_transferred_samples)
     
     def create_kd_dataset(self, percentage_amount=0.2):
-        # Create the knowledge distillation dataset
-        # The dataset is created by sampling from the devices
-        # The dataset is then used to train the user model
-        kd_dataset = np.array([])
-        for device in self.devices:
-            # TODO : Amount depends on the device uplink rate
-            kd_dataset = np.append(kd_dataset, device.sample(percentage_amount), axis=0)
-
-        self.kd_dataset = datasets.Dataset.from_list(kd_dataset.tolist())
-        print(f"Created knowledge distillation dataset with {len(self.kd_dataset)} samples.")
+        self.kd_dataset = self.sample_devices(percentage_amount)
     
     # TODO: this function should have as parameter the uplink rate of the device
-    # TODO: User should send the centroids to the users, as the entire dataset is no longer labeled
     def compute_centroids(self, shrinkage_ratio):
-        # Assemble the entire dataset from the devices
-        dataset = np.array([])
-        for device in self.devices:
-            # TODO : Amount depends on the device uplink rate
-            dataset = np.append(arr=dataset, values=device.sample(0.1), axis=0)
-        dataset = datasets.Dataset.from_list(dataset.tolist())
+
+        dataset = self.sample_devices(.1)
         features = np.array(dataset["img"]).reshape(len(dataset), -1)
         labels = np.array(dataset["label"])
 
@@ -403,5 +302,12 @@ class User():
         n_clusters = math.floor(shrinkage_ratio*NUM_CLASSES)
         kmeans = KMeans(n_clusters=n_clusters).fit(feature_space)
 
-        # Return the estimators
         return lda, kmeans
+    
+    def sample_devices(self, percentage):
+        # Assemble the entire dataset from the devices
+        dataset = np.array([])
+        for device in self.devices:
+            dataset = np.append(arr=dataset, values=device.sample(percentage), axis=0)
+        dataset = datasets.Dataset.from_list(dataset.tolist())
+

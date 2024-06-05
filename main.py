@@ -104,8 +104,6 @@ def main():
     accuracies = []
     accuracies.append(initial_accuracy)
     
-    server.select_users(users, split=1.0)
-
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
@@ -114,28 +112,12 @@ def main():
 
         # Server performs selection of the users
         # ShuffleFL step 3
-        # server.select_users(users, split=1.0)
+        server.select_users(split=1.0)
 
         # Users report the staleness factor to the server, and
         # The server sends the adaptive scaling factor to the users
         # ShuffleFL step 4, 5
         server.send_adaptive_scaling_factor()
-
-        # ShuffleFL step 6
-        # Can be executed in parallel
-        # n_cores = cpu_count()
-        # res = Parallel(n_jobs=n_cores, backend="threading")(delayed(train_user)(
-        #                                                server, 
-        #                                                user, 
-        #                                                user_idx, 
-        #                                                latency_histories[user_idx], 
-        #                                                data_imbalance_histories[user_idx], 
-        #                                                on_device_epochs, 
-        #                                                adapt, 
-        #                                                shuffle) for user_idx, user in enumerate(users))
-        # users = [item[0] for item in res]
-        # latency_histories = [item[1] for item in res]
-        # data_imbalance_hi stories = [item[2] for item in res]
 
         for user_idx, user in enumerate(server.users):
             if adapt:
