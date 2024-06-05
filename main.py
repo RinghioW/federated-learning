@@ -106,7 +106,7 @@ def main():
 
                 # User optimizes the transmission matrices
                 # ShuffleFL step 9
-                user.optimize_transmission_matrices(epoch=epoch)
+                user.optimize_transmission_matrices()
 
                 # User shuffles the data
                 # ShuffleFL step 10

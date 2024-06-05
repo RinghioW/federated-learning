@@ -10,8 +10,7 @@ import datasets
 from config import Style
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
-from plots import plot_optimization
-from optimize import shuffle_metrics
+from optimize import optimize_transmission_matrices
 from metrics import staleness_factor
 from shuffle import shuffle_data
 class User():
@@ -28,9 +27,8 @@ class User():
         # Also used by equation 7 as the optimization variable for the argmin
         # Shrinkage ratio for reducing the classes in the transition matrix
         self.shrinkage_ratio = 0.3
-        initial_transition_matrices = np.random.rand(len(devices), math.floor(classes*self.shrinkage_ratio), len(devices))
-        sums = np.sum(initial_transition_matrices, axis=2)
-        self.transition_matrices = initial_transition_matrices / sums[:, :, np.newaxis]
+
+        self.transition_matrices = None
         
         # System latencies for each device
         self.adaptive_scaling_factor = 1.0
@@ -176,84 +174,16 @@ class User():
         for device, dataset, cluster in zip(self.devices, datasets, clusters):
             device.dataset = dataset
             device.clusters = cluster
-
-    # Function for optimizing equation 7 from ShuffleFL
-    def optimize_transmission_matrices(self, epoch, trace=True):
-        # Define the objective function to optimize
-        # Takes as an input the transfer matrices
-        # Returns as an output the result of Equation 7
-
-        # Compute the dataset clusters for each device
+        
+    def optimize_transmission_matrices(self):
+        n_devices = len(self.devices)
+        n_clusters = math.floor(NUM_CLASSES * self.shrinkage_ratio)
+        adaptive_scaling_factor = self.adaptive_scaling_factor
         dataset_distributions = [device.dataset_distribution() for device in self.devices]
         uplinks = [device.config["uplink_rate"] for device in self.devices]
         downlinks = [device.config["downlink_rate"] for device in self.devices]
         computes = [device.config["compute"] for device in self.devices]
-
-        if trace:
-            di_history = []
-            sl_history = []
-            obj_fun_history = []
-
-        def objective_function(x):
-            # Parse args
-            transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
-                
-            # Simulate the transferring of the data according to the matrices
-            latencies, data_imbalances = shuffle_metrics(uplinks, downlinks, computes, transfer_matrices, dataset_distributions)
-
-            # Compute the loss function
-            # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
-            # Time std is usually very small and the max time is usually very large
-            # But a better approach would be to normalize the values or take the square of the std
-            system_latency = STD_CORRECTION*np.std(latencies) + np.max(latencies)
-            data_imbalance = self.adaptive_scaling_factor*np.max(data_imbalances)
-            obj_func = system_latency + data_imbalance
-
-            if trace:
-                di_history.append(data_imbalance)
-                sl_history.append(system_latency)
-                obj_fun_history.append(obj_func)
-
-            # Save the objective function for plotting
-            return obj_func
-
-        # Define the constraints for the optimization
-        # Row sum represents the probability of data of each class that is sent
-        # Sum(row) <= 1
-        # Equivalent to [1 - Sum(row)] >= 0
-        # Note that in original ShuffleFL the constraint is Sum(row) = 1
-        # But in this case, we can use the same column as an additional dataset
-        def one_minus_sum_rows(variables, num_devices, num_clusters):
-            # Reshape the flat variables back to the transition matrices shape
-            transition_matrices = variables.reshape((num_devices, num_clusters, num_devices))
-            return (1. - np.sum(transition_matrices, axis=2)).flatten()
-        
-        num_devices = len(self.devices)
-        num_clusters = math.floor(NUM_CLASSES*self.shrinkage_ratio)
-        num_variables = num_devices * (num_clusters * num_devices)
-        # Each element in the matrix is a probability, so it must be between 0 and 1
-        bounds = [(0.,1.)] * num_variables
-        # If the sum is less than one, we can use same-device column as additional dataset
-        # constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
-        constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
-        
-        # Run the optimization
-        current_transition_matrices = np.array(self.transition_matrices).flatten()
-        result = minimize(objective_function,
-                          x0=current_transition_matrices,
-                          method='SLSQP', bounds=bounds,
-                          constraints=constraints,
-                          options={'maxiter': 50, 'ftol': 1e-01, 'eps': 1e-01})
-        
-        # Update the transition matrices
-        if not result.success:
-            print(f"{Style.RED}[ERROR]{Style.RESET} Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
-        
-        # Save the trace
-        if trace:
-            plot_optimization(self.id, epoch, di_history, sl_history, obj_fun_history)
-
-        self.transition_matrices = result.x.reshape((num_devices, num_clusters, num_devices))
+        self.transition_matrices = optimize_transmission_matrices(self.transition_matrices, n_devices, n_clusters, adaptive_scaling_factor, dataset_distributions, uplinks, downlinks, computes)
     
     # Compute the difference in capability of the user compared to last round
     # Implements Equation 8 from ShuffleFL 
