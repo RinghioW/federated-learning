@@ -13,10 +13,10 @@ from config import Style
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
 from plots import plot_optimization
-import pymoo
+from copy import deepcopy
 
 class User():
-    def __init__(self, id, devices, classespython=NUM_CLASSES) -> None:
+    def __init__(self, id, devices, classes=NUM_CLASSES) -> None:
         self.id = id
         self.devices = devices
         self.kd_dataset: datasets.Dataset = None
@@ -64,16 +64,14 @@ class User():
             device.path = f"checkpoints/user_{self.id}/"
             resources = device.config["compute"] + device.config["memory"] + device.config["energy_budget"]
             # Adaptation is based on the device resources
-            # if resources < 5:
-            #     device.model_params = {"quantize": True, "pruning_factor": 0.}
-            # elif resources < 10:
-            #     device.model_params = {"quantize": False, "pruning_factor": 0.5}
-            # elif resources < 20:
-            #     device.model_params = {"quantize": False, "pruning_factor": 0.3}
-            # else:
-            #     device.model_params = {"quantize": False, "pruning_factor": 0.1}
-            # TODO: fix this
-            device.model_params = {"quantize": False, "pruning_factor": 0.}
+            if resources < 30:
+                device.model_params = {"quantize": True, "pruning_factor": 0.}
+            elif resources < 40:
+                device.model_params = {"quantize": False, "pruning_factor": 0.5}
+            elif resources < 50:
+                device.model_params = {"quantize": False, "pruning_factor": 0.3}
+            else:
+                device.model_params = {"quantize": False, "pruning_factor": 0.1}
     # Train the user model using knowledge distillation
     def aggregate_updates(self, learning_rate=0.001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model()
@@ -91,7 +89,7 @@ class User():
         for device in self.devices:
             teacher = device.model()
             checkpoint = torch.load(device.path + f"device_{device.config['id']}.pt")
-            teacher.load_state_dict(checkpoint['model_state_dict'])
+            teacher.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
             teacher.eval()
             teachers.append(teacher)
         
@@ -294,16 +292,10 @@ class User():
             # Parse args
             transfer_matrices = x.reshape((len(self.devices), math.floor(NUM_CLASSES*self.shrinkage_ratio), len(self.devices)))
             
-            # Save the state of the clusters of each device
-            devices_dataset_clusters = [device.dataset_clusters for device in self.devices]
+            mock_user = deepcopy(self)
                 
             # Simulate the transferring of the data according to the matrices
-            latencies, data_imbalances = self.mock_shuffle_data(transfer_matrices)
-
-            # Restore the state of the clusters of each device
-            for idx, device in enumerate(self.devices):
-                device.dataset_clusters = devices_dataset_clusters[idx]
-                device.num_transferred_samples = 0
+            latencies, data_imbalances = mock_user.mock_shuffle_data(transfer_matrices)
 
             # Compute the loss function
             # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
@@ -339,7 +331,7 @@ class User():
         bounds = [(0.,1.)] * num_variables
         # If the sum is less than one, we can use same-device column as additional dataset
         # constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
-        constraints = [{'type': 'eq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
+        constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables, num_devices, num_clusters)}]
         
         # Run the optimization
         current_transition_matrices = np.array(self.transition_matrices).flatten()
