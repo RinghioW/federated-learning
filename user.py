@@ -152,7 +152,7 @@ class User():
     def train(self, epochs=5, verbose=True):
         # Adapt the model
         pass
-    
+
         # Train the devices
         for device in self.devices:
             device.train(epochs, verbose)
@@ -278,8 +278,8 @@ class User():
         # Compute the staleness factor
         self.staleness_factor = staleness_factor(dataset_size, num_transferred_samples)
     
-    def create_kd_dataset(self, percentage_amount=0.2):
-        self.kd_dataset = self.sample_devices(percentage_amount)
+    def create_kd_dataset(self, percentage=0.2):
+        self.kd_dataset = self.sample_devices(percentage)
     
     # TODO: this function should have as parameter the uplink rate of the device
     def compute_centroids(self, shrinkage_ratio):
@@ -298,10 +298,10 @@ class User():
     
     def sample_devices(self, percentage):
         # Assemble the entire dataset from the devices
-        dataset = np.array([])
+        dataset = []
         for device in self.devices:
-            dataset = np.append(arr=dataset, values=device.sample(percentage), axis=0)
-        return datasets.Dataset.from_list(dataset.tolist())
+            dataset.extend(device.sample(percentage))
+        return datasets.Dataset.from_list(dataset)
 
     def measure_latencies():
         pass

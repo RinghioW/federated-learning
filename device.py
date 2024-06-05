@@ -72,21 +72,9 @@ class Device():
 
     
     # Function to sample a sub-dataset from the dataset
-    def sample(self, percentage=None, uplink=None, cluster=None, random=None, n=None):
-        dataset = list(self.dataset)
-        if percentage is not None:
-            amount = math.floor(percentage * len(dataset))
-            if uplink is not None:
-                pass
-        elif cluster is not None:
-            n_class_samples = self.dataset_distribution()[cluster]
-            amount = math.floor(percentage * n_class_samples)
-        elif n is not None:
-            amount = n
-        if random is not None:
-            reduced_dataset = np.random.permutation(dataset)[:amount]
-        else:
-            reduced_dataset = dataset[:amount]
+    def sample(self, percentage, uplink=None):
+        amount = math.floor(percentage * len(self.dataset))
+        reduced_dataset = np.random.permutation(self.dataset)[:amount].tolist()
         return reduced_dataset
 
     def cluster_data(self, lda_estimator, kmeans_estimator):
