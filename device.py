@@ -96,3 +96,13 @@ class Device():
     
     def dataset_distribution(self):
         return np.bincount(self.labels).tolist()
+    
+    @staticmethod
+    def generate_configs(num_devices):
+        return [{"id" : i,
+                "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
+                "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
+                "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
+                "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
+                "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
+                } for i in range(num_devices)]

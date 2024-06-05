@@ -1,4 +1,5 @@
 import datasets
+import math
 # Returns device datasets and cluster labels after shuffling the data
 # Assume that datasets is a list of numpy arrays
 # Implements the transformation described by Equation 1 from ShuffleFL
@@ -11,7 +12,7 @@ def shuffle_data(datasets, clusters, distributions, transition_matrices):
             for j in range(len(transition_matrix[0])):
                 if d != j:
                     # Sample class i and send to device j
-                    num_samples = transition_matrix[i][j] * distribution[i]
+                    num_samples = math.floor(transition_matrix[i][j] * distribution[i])
                     datasets[d], clusters[d], samples = _extract(datasets[d], clusters[d], i, num_samples)
 
                     # Add the samples to the dataset of device j
@@ -20,17 +21,18 @@ def shuffle_data(datasets, clusters, distributions, transition_matrices):
     return datasets, clusters
 
 # Extract an amount of samples of the target cluster from the dataset
-def _extract(dataset, cluster_labels, target_cluster, amount):
+def _extract(dataset, cluster_labels, target_cluster, num_samples):
     dataset = list(dataset)
     
     matches = []
-    while len(matches) < amount:
+    while len(matches) < num_samples:
         for idx, cluster in enumerate(cluster_labels):
             if cluster == target_cluster:
                 matches.append(dataset.pop(idx))
                 cluster_labels.pop(idx)
                 break
-        break
+            if len(dataset) == 0:
+                break
     return datasets.Dataset.from_list(dataset), cluster_labels, matches
 
 # Insert samples of cluster label into the dataset

@@ -4,10 +4,8 @@ import time
 from device import Device
 from user import User
 from server import Server
-from config import Style, STD_CORRECTION
-from joblib import Parallel, delayed, cpu_count
+from config import Style
 from plots import plot_results
-import os
 
 def main():
 
@@ -60,34 +58,10 @@ def main():
     # If the latency is really high, this means that SL >> DI,
     # Meaning that data imbalance will not be accounted for
     # And devices will not share data with each other
-    configs = [{"id" : i,
-                "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
-                "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
-                "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
-                "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
-                "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
-                } for i in range(num_devices)]
-
-    # Create devices and users
+    configs = Device.generate_configs(num_devices)
     devices = [Device(configs[i], trainsets[i*server_epochs], valsets[i*server_epochs]) for i in range(num_devices)]
     devices_grouped = np.array_split(devices, num_users)
     users = [User(id=i, devices=devices_grouped[i]) for i in range(num_users)]
-    print(users)
-            
-            
-    # Users change their available compute and memory 
-    configs = [{"id" : i,
-                "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
-                "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
-                "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
-                "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
-                "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
-                } for i in range(num_devices)]
-    
-    for user in users:
-        for device in user.devices:
-            device.config = configs[device.config["id"]]
-
     server = Server(dataset)
 
     time_start = time.time()
@@ -162,13 +136,7 @@ def main():
         accuracies.append(accuracy)
 
         # Users change their available compute and memory 
-        configs = [{"id" : i,
-                    "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
-                    "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
-                    "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
-                    "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
-                    "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
-                    } for i in range(num_devices)]
+        configs = Device.generate_configs(num_devices)
         
         # Update the data on the devices
         for user_idx, user in enumerate(users):
