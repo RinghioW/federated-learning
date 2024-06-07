@@ -12,7 +12,7 @@ def optimize_transmission_matrices(transition_matrices,
                                    n_devices, 
                                    n_clusters,
                                     adaptive_scaling_factor, 
-                                    dataset_distributions, 
+                                    cluster_distributions, 
                                     uplinks, 
                                     downlinks, 
                                     computes):
@@ -30,7 +30,7 @@ def optimize_transmission_matrices(transition_matrices,
         tms = x.reshape((n_devices, n_clusters, n_devices))
             
         # Simulate the transferring of the data according to the matrices
-        latencies, data_imbalances = _shuffle_metrics(uplinks, downlinks, computes, tms, dataset_distributions)
+        latencies, data_imbalances = _shuffle_metrics(uplinks, downlinks, computes, tms, cluster_distributions)
 
         # Compute the loss function
         # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
@@ -78,24 +78,24 @@ def optimize_transmission_matrices(transition_matrices,
     return result.x.reshape((n_devices, n_clusters, n_devices))
 
 
-def _shuffle_metrics(uplinks, downlinks, computes, transition_matrices, dataset_distributions):
-    dataset_distributions_post_shuffle = _shuffle_data(transition_matrices, dataset_distributions)
+def _shuffle_metrics(uplinks, downlinks, computes, transition_matrices, cluster_distributions):
+    dataset_distributions_post_shuffle = _shuffle_clusters(transition_matrices, cluster_distributions)
 
-    l = latencies(uplinks, downlinks, computes, transition_matrices, dataset_distributions, dataset_distributions_post_shuffle)
+    l = latencies(uplinks, downlinks, computes, transition_matrices, cluster_distributions, dataset_distributions_post_shuffle)
     d = data_imbalances(dataset_distributions_post_shuffle)
     return l, d
     
 # Returns a list of the dataset clusters after shuffling the data
-def _shuffle_data(transition_matrices, dataset_distributions):
-    n_devices = len(dataset_distributions)
+def _shuffle_clusters(transition_matrices, cluster_distributions):
+    n_devices = len(cluster_distributions)
 
-    dataset_distributions_post_shuffle = dataset_distributions.copy()
+    dataset_distributions_post_shuffle = cluster_distributions.copy()
     
     for d in range(n_devices):
         transition_matrix = transition_matrices[d]
 
         for i in range(len(transition_matrices)):
-            num_samples = dataset_distributions[d][i]
+            num_samples = cluster_distributions[d][i]
             for j in range(len(transition_matrices[0])):
                 if d != j:
                     transmitted_samples = math.floor(transition_matrix[i][j] * num_samples)

@@ -138,7 +138,7 @@ class User():
                 running_kd_loss += soft_targets_loss.item()
                 running_ce_loss += label_loss.item()
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
-            print(f"Epoch {epoch+1}/{epochs}, Loss: {running_loss / len(train_loader.dataset)} (KD: {running_kd_loss / len(train_loader.dataset)}, CE: {running_ce_loss / len(train_loader.dataset)}), Accuracy: {running_accuracy / len(train_loader.dataset)}")
+            print(f"U{self.id}, e{epoch+1} - Loss: {(running_loss / len(train_loader.dataset)): .4f}, Accuracy: {(running_accuracy / len(train_loader.dataset)): .3f}")
         
         # Save the model for checkpointing
         torch.save({'model_state_dict': student.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, f"checkpoints/user_{self.id}/user.pt")
@@ -163,7 +163,7 @@ class User():
     def _reduce_dimensionality(self):
         lda_estimator, kmeans_estimator = self._compute_centroids(self.shrinkage_ratio)
         for device in self.devices:
-            device = device.cluster_data(lda_estimator, kmeans_estimator)
+            device = device.cluster(lda_estimator, kmeans_estimator)
 
     def shuffle(self):
         # Reduce dimensionality of the transmission matrices
@@ -175,23 +175,23 @@ class User():
         n_devices = len(self.devices)
         n_clusters = math.floor(NUM_CLASSES * self.shrinkage_ratio)
         adaptive_scaling_factor = self.adaptive_scaling_factor
-        dataset_distributions = [device.dataset_distribution() for device in self.devices]
+        cluster_distributions = [device.cluster_distribution() for device in self.devices]
         uplinks = [device.config["uplink_rate"] for device in self.devices]
         downlinks = [device.config["downlink_rate"] for device in self.devices]
         computes = [device.config["compute"] for device in self.devices]
-        self.transition_matrices = optimize_transmission_matrices(self.transition_matrices, n_devices, n_clusters, adaptive_scaling_factor, dataset_distributions, uplinks, downlinks, computes)
+        self.transition_matrices = optimize_transmission_matrices(self.transition_matrices, n_devices, n_clusters, adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes)
 
         # Shuffle the data and update the transition matrices
         # Implements Equation 1 from ShuffleFL
         datasets = [device.dataset for device in self.devices]
         clusters = [device.labels for device in self.devices]
-        dataset_distributions = [device.dataset_distribution() for device in self.devices]
-        datasets, clusters = shuffle_data(datasets, clusters, dataset_distributions, self.transition_matrices)
+        res_datasets, res_clusters = shuffle_data(datasets, clusters, cluster_distributions, self.transition_matrices)
 
         # Update the devices with the new datasets and clusters
-        for device, dataset, cluster in zip(self.devices, datasets, clusters):
-            device.dataset = dataset
-            device.clusters = cluster
+        # TODO: Should clusters be reassigned?
+        for d, dataset, cluster in zip(self.devices, res_datasets, res_clusters):
+            d.dataset = dataset
+            d.clusters = cluster
 
     # Compute the difference in capability of the user compared to last round
     # Implements Equation 8 from ShuffleFL 
@@ -239,10 +239,4 @@ class User():
         for device in self.devices:
             dataset.extend(device.sample(percentage))
         return datasets.Dataset.from_list(dataset)
-
-    def measure_latencies():
-        pass
-
-    def measure_data_imbalances():
-        pass
 

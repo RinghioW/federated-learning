@@ -4,8 +4,9 @@ import numpy as np
 import math
 import torchvision.transforms as transforms
 class Device():
-    def __init__(self, config, dataset, valset) -> None:
-        self.config = config # Configuration of the device
+    def __init__(self, id, dataset, valset) -> None:
+        self.id = id
+        self.config = Device.generate_config(id) # Configuration of the device
         self.dataset = dataset
 
         self.valset = valset # TODO: Figure out how to use this
@@ -13,7 +14,7 @@ class Device():
         self.model = None # Model class (NOT instance)
         self.model_params = None # Configuration to pass to the model constructor
         self.path = None # Relative path to save the model
-        self.labels = None # Labels of the dataset
+        self.clusters = None # Labels of the dataset
         self.num_transferred_samples = 0
         self.init = False # Useful to figure out whether we have a checkpoint or not
 
@@ -62,7 +63,7 @@ class Device():
             epoch_loss /= len(trainloader.dataset)
             epoch_acc = correct / total
             if verbose:
-                print(f"Device {self.config['id']} - Epoch {epoch+1}: loss {epoch_loss}, accuracy {epoch_acc}")
+                print(f"D{self.config['id']}, e{epoch+1} - Loss: {epoch_loss: .4f}, Accuracy: {epoch_acc: .3f}")
 
         # Save the model
         torch.save({
@@ -72,25 +73,26 @@ class Device():
 
     
     # Function to sample a sub-dataset from the dataset
+    # TODO: Implement uplink in a sensible way
     def sample(self, percentage, uplink=None):
         amount = math.floor(percentage * len(self.dataset))
         reduced_dataset = np.random.permutation(self.dataset)[:amount].tolist()
         return reduced_dataset
 
-    def cluster_data(self, lda_estimator, kmeans_estimator):
+    def cluster(self, lda_estimator, kmeans_estimator):
         dataset = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
         feature_space = lda_estimator.transform(dataset)
-        self.labels = kmeans_estimator.predict(feature_space).tolist()
+        self.clusters = kmeans_estimator.predict(feature_space).tolist()
     
-    def dataset_distribution(self):
-        return np.bincount(self.labels).tolist()
-    
+    def cluster_distribution(self):
+        return np.bincount(self.clusters).tolist()
+
     @staticmethod
-    def generate_configs(num_devices):
-        return [{"id" : i,
+    def generate_config(id):
+        return {"id" : id,
                 "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
                 "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
                 "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
                 "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
                 "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
-                } for i in range(num_devices)]
+                }

@@ -3,13 +3,9 @@ from config import DEVICE
 import torchvision
 from adaptivenet import AdaptiveNet
 class Server():
-    def __init__(self, dataset, users):
-        if dataset == "cifar10":
-            self.model = AdaptiveNet
-        else:
-            # TODO: Add more datasets
-            # Femnist, Shakespeare
-            raise ValueError(f"Invalid dataset. Please choose from valid datasets")
+    def __init__(self, dataset, model, users):
+        self.model = model
+        self.dataset = dataset
         self.users = users
         self.wall_clock_training_times = None
         self.scaling_factor = 10 ** 5
@@ -18,7 +14,6 @@ class Server():
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient
     # Step 18 in the ShuffleFL algorithm
-    # TODO: Use FedAvg instead of parameter averaging (aggregate the gradients instead of the weights)
     def _aggregate_updates(self):
         sum_weights = torch.load(f"checkpoints/user_0/user.pt")['model_state_dict']
         for user in self.users[1:]:
@@ -94,13 +89,13 @@ class Server():
             user.train(epochs=on_device_epochs, verbose=True)
     
     def train(self):
-        # Select users
+        # Choose the users for the next round of training
         self._select_users()
 
         # Send the adaptive scaling factor to the users
         self._send_adaptive_scaling_factor()
 
-        # Poll users
+        # Wait for users to send their model
         self._poll_users()
 
         # Aggregate the updates from the users
