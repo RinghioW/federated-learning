@@ -49,9 +49,6 @@ def main():
         from data.shakespeare import load_datasets
         trainsets, valsets, testset = load_datasets(num_devices)
 
-    # Number of epochs that each device will train for
-    on_device_epochs = 10
-
     # Create device configurations
     # TODO: Figure out how to characterize the devices in a way that makes sense
     # The higher these numbers are, the higher the latency factor will be
@@ -62,7 +59,7 @@ def main():
     devices = [Device(configs[i], trainsets[i*server_epochs], valsets[i*server_epochs]) for i in range(num_devices)]
     devices_grouped = np.array_split(devices, num_users)
     users = [User(id=i, devices=devices_grouped[i]) for i in range(num_users)]
-    server = Server(dataset)
+    server = Server(dataset, users)
 
     time_start = time.time()
     
@@ -82,48 +79,6 @@ def main():
     # ShuffleFL step 1, 2
     for epoch in range(server_epochs):
         print(f"{Style.YELLOW}FL epoch {epoch+1}/{server_epochs}{Style.RESET}")
-
-        # Server performs selection of the users
-        # ShuffleFL step 3
-        server.select(users, split=1.0)
-
-        # Users report the staleness factor to the server, and
-        # The server sends the adaptive scaling factor to the users
-        # ShuffleFL step 4, 5
-        server.send_adaptive_scaling_factor()
-
-        for user_idx, user in enumerate(server.users):
-            if adapt:
-                # User adapts the model for their devices
-                # ShuffleFL Novelty
-                user.adapt_model(server.model)
-            
-            if shuffle:
-                print(f"User before shuffling: {user}")
-                # Reduce dimensionality of the transmission matrices
-                # ShuffleFL step 7, 8
-                user.reduce_dimensionality()
-
-                # User optimizes the transmission matrices
-                # ShuffleFL step 9
-                user.optimize_transmission_matrices()
-
-                # User shuffles the data
-                # ShuffleFL step 10
-                user.shuffle()
-                print(f"User after shuffling: {user}")
-
-            if adapt:
-                # User creates the knowledge distillation dataset
-                # ShuffleFL Novelty
-                user.create_kd_dataset()
-
-                # User updates parameters based on last iteration
-                user.update_average_capability()
-
-            # User trains devices
-            # ShuffleFL step 11-15
-            user.train(epochs=on_device_epochs, verbose=True)
 
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19

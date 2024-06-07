@@ -1,13 +1,11 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from config import DEVICE, NUM_CLASSES, STD_CORRECTION
-from scipy.optimize import minimize
+from config import DEVICE, NUM_CLASSES
 import math
 import random
 import torchvision
 import datasets
-from config import Style
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.cluster import KMeans
 from optimize import optimize_transmission_matrices
@@ -50,7 +48,7 @@ class User():
     # Adapt the model to the devices
     # Implements the adaptation step from ShuffleFL Novelty
     # Constructs a function s.t. device_model = f(user_model, device_resources, device_data_distribution)
-    def adapt_model(self, model):
+    def _adapt_model(self, model):
         self.model = model
         for device in self.devices:
             # If compute is low, better to quantize the network
@@ -149,33 +147,31 @@ class User():
     # Steps 11-15 in the ShuffleFL Algorithm
     def train(self, epochs=5, verbose=True):
         # Adapt the model
-        pass
+        self._adapt_model(self.model)
 
         # Train the devices
         for device in self.devices:
             device.train(epochs, verbose)
         
+        # Create the knowledge distillation dataset
+        self._create_kd_dataset()
+
         # Aggregate the updates
         self._aggregate_updates()
 
     # Implements section 4.4 from ShuffleFL
-    def reduce_dimensionality(self):
-        lda_estimator, kmeans_estimator = self.compute_centroids(self.shrinkage_ratio)
+    def _reduce_dimensionality(self):
+        lda_estimator, kmeans_estimator = self._compute_centroids(self.shrinkage_ratio)
         for device in self.devices:
             device = device.cluster_data(lda_estimator, kmeans_estimator)
 
     def shuffle(self):
-        # Shuffle the data and update the transition matrices
-        # Implements Equation 1 from ShuffleFL
-        datasets = [device.dataset for device in self.devices]
-        clusters = [device.labels for device in self.devices]
-        dataset_distributions = [device.dataset_distribution() for device in self.devices]
-        datasets, clusters = shuffle_data(datasets, clusters, dataset_distributions, self.transition_matrices)
-        for device, dataset, cluster in zip(self.devices, datasets, clusters):
-            device.dataset = dataset
-            device.clusters = cluster
-        
-    def optimize_transmission_matrices(self):
+        # Reduce dimensionality of the transmission matrices
+        # ShuffleFL step 7, 8
+        self._reduce_dimensionality()
+
+        # User optimizes the transmission matrices
+        # ShuffleFL step 9
         n_devices = len(self.devices)
         n_clusters = math.floor(NUM_CLASSES * self.shrinkage_ratio)
         adaptive_scaling_factor = self.adaptive_scaling_factor
@@ -184,7 +180,19 @@ class User():
         downlinks = [device.config["downlink_rate"] for device in self.devices]
         computes = [device.config["compute"] for device in self.devices]
         self.transition_matrices = optimize_transmission_matrices(self.transition_matrices, n_devices, n_clusters, adaptive_scaling_factor, dataset_distributions, uplinks, downlinks, computes)
-    
+
+        # Shuffle the data and update the transition matrices
+        # Implements Equation 1 from ShuffleFL
+        datasets = [device.dataset for device in self.devices]
+        clusters = [device.labels for device in self.devices]
+        dataset_distributions = [device.dataset_distribution() for device in self.devices]
+        datasets, clusters = shuffle_data(datasets, clusters, dataset_distributions, self.transition_matrices)
+
+        # Update the devices with the new datasets and clusters
+        for device, dataset, cluster in zip(self.devices, datasets, clusters):
+            device.dataset = dataset
+            device.clusters = cluster
+
     # Compute the difference in capability of the user compared to last round
     # Implements Equation 8 from ShuffleFL 
     def update_average_capability(self):
@@ -208,13 +216,12 @@ class User():
         # Compute the staleness factor
         self.staleness_factor = staleness_factor(dataset_size, num_transferred_samples)
     
-    def create_kd_dataset(self, percentage=0.2):
-        self.kd_dataset = self.sample_devices(percentage)
+    def _create_kd_dataset(self, percentage=0.2):
+        self.kd_dataset = self._sample_devices(percentage)
     
     # TODO: this function should have as parameter the uplink rate of the device
-    def compute_centroids(self, shrinkage_ratio):
-
-        dataset = self.sample_devices(.1)
+    def _compute_centroids(self, shrinkage_ratio):
+        dataset = self._sample_devices(.1)
         features = np.array(dataset["img"]).reshape(len(dataset), -1)
         labels = np.array(dataset["label"])
 
@@ -226,7 +233,7 @@ class User():
 
         return lda, kmeans
     
-    def sample_devices(self, percentage):
+    def _sample_devices(self, percentage):
         # Assemble the entire dataset from the devices
         dataset = []
         for device in self.devices:
@@ -238,3 +245,4 @@ class User():
 
     def measure_data_imbalances():
         pass
+

@@ -3,14 +3,14 @@ from config import DEVICE
 import torchvision
 from adaptivenet import AdaptiveNet
 class Server():
-    def __init__(self, dataset):
+    def __init__(self, dataset, users):
         if dataset == "cifar10":
             self.model = AdaptiveNet
         else:
             # TODO: Add more datasets
             # Femnist, Shakespeare
             raise ValueError(f"Invalid dataset. Please choose from valid datasets")
-        self.users = None
+        self.users = users
         self.wall_clock_training_times = None
         self.scaling_factor = 10 ** 5
         self.init = False
@@ -19,7 +19,7 @@ class Server():
     # In this case, averaging the weights will be sufficient
     # Step 18 in the ShuffleFL algorithm
     # TODO: Use FedAvg instead of parameter averaging (aggregate the gradients instead of the weights)
-    def train(self):
+    def _aggregate_updates(self):
         sum_weights = torch.load(f"checkpoints/user_0/user.pt")['model_state_dict']
         for user in self.users[1:]:
             state_dict = torch.load(f"checkpoints/user_{user.id}/user.pt")['model_state_dict']
@@ -61,7 +61,7 @@ class Server():
         return loss, accuracy
     
     # Equation 10 in ShuffleFL
-    def send_adaptive_scaling_factor(self):
+    def _send_adaptive_scaling_factor(self):
         # Compute estimated performances of the users
         estimated_performances = [user.diff_capability * self.wall_clock_training_times[idx] for idx, user in enumerate(self.users)]
 
@@ -74,7 +74,34 @@ class Server():
 
     # Select users for the next round of training
     # TODO: Consider tier-based selection (TiFL) instead of random selection
-    def select(self, users, split=1.):
+    def _select_users(self, split=1.):
+        # TODO: Select users
+        pass
+
+        for user in self.users:
+            user.model = self.model
+
         # self.users = random.choices(users, k=math.floor(split*len(users)))
-        self.users = users
         self.wall_clock_training_times = [1.] * len(self.users)
+
+    def _poll_users(self, adapt=True, shuffle=True, on_device_epochs=10):
+        for user in self.users:
+            # User updates parameters based on last iteration
+            user.update_average_capability()
+
+            # User trains devices
+            # ShuffleFL step 11-15
+            user.train(epochs=on_device_epochs, verbose=True)
+    
+    def train(self):
+        # Select users
+        self._select_users()
+
+        # Send the adaptive scaling factor to the users
+        self._send_adaptive_scaling_factor()
+
+        # Poll users
+        self._poll_users()
+
+        # Aggregate the updates from the users
+        self._aggregate_updates()
