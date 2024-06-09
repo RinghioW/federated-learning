@@ -98,9 +98,9 @@ def _shuffle_clusters(transition_matrices, cluster_distributions):
     for d in range(n_devices):
         transition_matrix = transition_matrices[d]
 
-        for i in range(len(transition_matrices)):
+        for i in range(len(transition_matrix)):
             num_samples = cluster_distributions[d][i]
-            for j in range(len(transition_matrices[0])):
+            for j in range(len(transition_matrix[0])):
                 if d != j:
                     transmitted_samples = math.floor(transition_matrix[i][j] * num_samples)
                     dataset_distributions_post_shuffle[d][i] -= transmitted_samples
