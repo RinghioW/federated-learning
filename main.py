@@ -1,6 +1,7 @@
-import numpy as np
-import argparse
-import time
+from numpy import array_split
+from argparse import ArgumentParser
+from time import time
+from datetime import timedelta
 from device import Device
 from user import User
 from server import Server
@@ -10,7 +11,7 @@ from adaptivenet import AdaptiveNet
 def main():
 
     # Define arguments
-    parser = argparse.ArgumentParser(description=f"{Style.GREEN}Heterogeneous federated learning framework using pytorch{Style.GREEN}")
+    parser = ArgumentParser(description=f"{Style.GREEN}Heterogeneous federated learning framework using pytorch{Style.GREEN}")
     print(parser.description)
 
     parser.add_argument("-u", "--users", dest="users", type=int, default=4, help="Total number of users (default: 2)")
@@ -37,24 +38,16 @@ def main():
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
         from data.cifar10 import load_datasets
-        trainsets, valsets, testset = load_datasets(num_clients=num_devices, epochs=server_epochs)
+        trainsets, valsets, testset = load_datasets(num_clients=num_devices, epochs=server_epochs+1)
     else:
         raise ValueError(f"Dataset {dataset} not implemented")
 
-    # Create device configurations
-    # TODO: Figure out how to characterize the devices in a way that makes sense
-    # The higher these numbers are, the higher the latency factor will be
-    # If the latency is really high, this means that SL >> DI,
-    # Meaning that data imbalance will not be accounted for
-    # And devices will not share data with each other
-    devices = [Device(i, trainsets[i*server_epochs], valsets[i*server_epochs]) for i in range(num_devices)]
-    devices_grouped = np.array_split(devices, num_users)
-    users = [User(id=i, devices=devices_grouped[i]) for i in range(num_users)]
+    users = [User(id=i, devices=[Device(j) for j in range(num_devices//num_users)]) for i in range(num_users)]
     model = AdaptiveNet
     server = Server(dataset, model, users)
 
-    time_start = time.time()
-    
+    time_start = time()
+
     # Evaluate the server model before training
     losses = []
     accuracies = []
@@ -71,6 +64,11 @@ def main():
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
     for epoch in range(server_epochs):
+        # Update the data and resources on the devices
+        for user in users:
+            for device in user.devices:
+                device.update(trainset=trainsets.pop(), valset=valsets.pop(), config=Device.generate_config(device.id))
+        
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
         server.train()
@@ -83,19 +81,13 @@ def main():
 
         print(f"{Style.YELLOW}------------\nS, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}\n------------{Style.RESET}")
 
-        # Update the data and resources on the devices
-        for user_idx, user in enumerate(users):
-            for device_idx, device in enumerate(user.devices):
-                idx = user_idx*num_devices//num_users + device_idx
-                device.dataset = trainsets[idx*server_epochs + epoch]
-                device.valset = valsets[idx*server_epochs + epoch]
-                device.config = Device.generate_config(device.id)
 
+    time_end = time()
+    print(f"{Style.GREEN}Elapsed Time: {str(timedelta(seconds=time_end - time_start))}{Style.RESET}")
+    
     # Save the results
     plot_results(results_dir, num_users, latency_histories, data_imbalance_histories, obj_functions, losses, accuracies)
 
-    time_end = time.time()
-    print(f"{Style.GREEN}Elapsed Time: {time_end - time_start}s{Style.RESET}")
 
 if __name__ == "__main__":
     main()

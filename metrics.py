@@ -57,6 +57,3 @@ def _t_communication(uplinks, downlinks, dataset_distributions, transition_matri
     
     t_communication = [t_transmission[i] + t_reception[i] for i in range(n_devices)]
     return t_communication
-
-def staleness_factor(dataset_size, n_transferred_samples):
-    return (3*dataset_size) / (3*dataset_size + n_transferred_samples)

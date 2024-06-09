@@ -1,7 +1,7 @@
 import torch
 from config import DEVICE
 import torchvision
-from adaptivenet import AdaptiveNet
+from statistics import fmean
 class Server():
     def __init__(self, dataset, model, users):
         self.model = model
@@ -58,14 +58,14 @@ class Server():
     # Equation 10 in ShuffleFL
     def _send_adaptive_scaling_factor(self):
         # Compute estimated performances of the users
-        estimated_performances = [user.diff_capability * self.wall_clock_training_times[idx] for idx, user in enumerate(self.users)]
+        estimated_performances = [user.diff_capability * training_time for user, training_time in zip(self.users, self.wall_clock_training_times)]
 
         # Compute average user performance
-        average_user_performance = sum(estimated_performances) / len(estimated_performances)
+        avg_user_performance = fmean(estimated_performances)
 
         # Compute adaptive scaling factor for each user
-        for idx, user in enumerate(self.users):
-            user.adaptive_scaling_factor = (average_user_performance / estimated_performances[idx]) * self.scaling_factor
+        for user, performance in zip(self.users, estimated_performances):
+            user.adaptive_scaling_factor = (avg_user_performance / performance) * self.scaling_factor
 
     # Select users for the next round of training
     # TODO: Consider tier-based selection (TiFL) instead of random selection
@@ -81,8 +81,6 @@ class Server():
 
     def _poll_users(self, adapt=True, shuffle=True, on_device_epochs=10):
         for user in self.users:
-            # User updates parameters based on last iteration
-            user.update_average_capability()
 
             # User trains devices
             # ShuffleFL step 11-15

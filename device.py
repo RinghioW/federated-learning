@@ -4,26 +4,27 @@ import numpy as np
 import math
 import torchvision.transforms as transforms
 class Device():
-    def __init__(self, id, dataset, valset) -> None:
+    def __init__(self, id) -> None:
         self.id = id
-        self.config = Device.generate_config(id) # Configuration of the device
-        self.dataset = dataset
+        self.config = None
 
-        self.valset = valset # TODO: Figure out how to use this
+        self.dataset = None
+        self.valset = None # TODO: Figure out how to use this
 
         self.model = None # Model class (NOT instance)
-        self.model_params = None # Configuration to pass to the model constructor
+        self.model_params = None
         self.path = None # Relative path to save the model
-        self.clusters = None # Labels of the dataset
-        self.num_transferred_samples = 0
-        self.init = False # Useful to figure out whether we have a checkpoint or not
+        self.has_checkpoint = False
+
+        self.transition_matrix = None
+
+        self.clusters = None # Clustered labels
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
     
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs=10, verbose=False):
-
         if len(self.dataset) == 0:
             return
 
@@ -32,12 +33,12 @@ class Device():
         net = self.model(**self.model_params)
         optimizer = torch.optim.Adam(net.parameters())
 
-        if self.init:
+        if self.has_checkpoint:
             checkpoint = torch.load(self.path + f"device_{self.config['id']}.pt")
             net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         else:
-            self.init = True
+            self.has_checkpoint = True
         
         net.train()
 
@@ -87,6 +88,19 @@ class Device():
     def cluster_distribution(self):
         return np.bincount(self.clusters).tolist()
 
+    def adapt(self, model, params, path):
+        self.model = model
+        self.model_params = params
+        self.path = path
+
+    def resources(self):
+        return self.config["compute"] + self.config["memory"] + self.config["energy_budget"]
+
+    # TODO: Figure out how to characterize the devices in a way that makes sense
+    # The higher these numbers are, the higher the latency factor will be
+    # If the latency is really high, this means that SL >> DI,
+    # Meaning that data imbalance will not be accounted for
+    # And devices will not share data with each other
     @staticmethod
     def generate_config(id):
         return {"id" : id,
@@ -96,3 +110,8 @@ class Device():
                 "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
                 "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
                 }
+    
+    def update(self, trainset, valset, config):
+        self.dataset = trainset
+        self.valset = valset
+        self.config = config

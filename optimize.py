@@ -20,10 +20,14 @@ def optimize_transmission_matrices(transition_matrices,
     # Takes as an input the transfer matrices
     # Returns as an output the result of Equation 7
 
-    if transition_matrices is None:
-        transition_matrices = np.random.rand(n_devices, n_clusters, n_devices)
-        sums = np.sum(transition_matrices, axis=2)
-        transition_matrices = transition_matrices / sums[:, :, np.newaxis]
+    for m in transition_matrices:
+        if m is None:
+            transition_matrices = np.random.rand(n_devices, n_clusters, n_devices)
+            sums = np.sum(transition_matrices, axis=2)
+            transition_matrices = transition_matrices / sums[:, :, np.newaxis]
+            break
+
+    transition_matrices = np.array(transition_matrices)
 
     def objective_function(x):
         # Parse args
