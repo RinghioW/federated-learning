@@ -13,13 +13,12 @@ from shuffle import shuffle_data
 from statistics import fmean
 
 class User():
-    def __init__(self, id, devices, n_classes=NUM_CLASSES) -> None:
+    def __init__(self, id, devices, testset, n_classes=NUM_CLASSES) -> None:
         self.id = id
         self.devices = devices
         self.kd_dataset: datasets.Dataset = None
         self.model = None
 
-        # TODO: add testset from the server to validate the users consistently
         # SHUFFLE-FL
 
         # Transition matrix of ShuffleFL of size (floor{number of classes * shrinkage ratio}, number of devices + 1)
@@ -35,11 +34,12 @@ class User():
         self.staleness_factor = 0.0
 
         # Average capability beta
-        self.diff_capability = 1. + random.random()
-        self.average_power = 1. + random.random()
-        self.average_bandwidth = 1. + random.random()
+        self.average_power = 1.
+        self.average_bandwidth = 1.
+        self.n_transferred_samples = 0
 
         self.init = False
+        self.testset = testset
 
 
     def __repr__(self) -> str:
@@ -79,9 +79,8 @@ class User():
         student.train()
 
         # TODO : Train in parallel, not sequentially (?)
-
-        # TODO : option 1 -> each device acts as a teacher separately
-        # TODO : option 2 -> average the teacher logits from all devices
+        # option 1 -> each device acts as a teacher separately
+        # option 2 -> average the teacher logits from all devices
         teachers = [] 
         for device in self.devices:
             teacher = device.model()
@@ -116,12 +115,6 @@ class User():
                 # Forward pass with the student model
                 student_logits = student(inputs)
 
-                #Soften the student logits by applying softmax first and log() second
-                # Compute the mean of the teacher logits received from all devices
-                # TODO: Does the mean make sense?
-
-                # TODO: test whether aggregating the logits or keeping them separate works best
-                # Because the KD is with multiple teachers, not only one teacher
                 averaged_teacher_logits = torch.mean(torch.stack(teacher_logits), dim=0)
                 soft_targets = torch.nn.functional.softmax(averaged_teacher_logits / T, dim=-1)
                 soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
@@ -154,20 +147,19 @@ class User():
         self._adapt_model(self.model)
 
         n_transferred_samples = self._shuffle()
+        self.n_transferred_samples = n_transferred_samples
 
         # Train the devices
         for device in self.devices:
             device.train(on_device_epochs)
             print(f"Device {device.config['id']} validation accuracy: {device.validate():.3f}")
-
-        # Update the average capability
-        self._update_average_capability(n_transferred_samples)
         
         # Create the knowledge distillation dataset
         self._create_kd_dataset()
 
         # Aggregate the updates
         self._aggregate_updates(epochs=kd_epochs)
+
 
     # Implements section 4.4 from ShuffleFL
     def _reduce_dimensionality(self):
@@ -210,33 +202,38 @@ class User():
 
     # Compute the difference in capability of the user compared to last round
     # Implements Equation 8 from ShuffleFL 
-    def _update_average_capability(self, n_transferred_samples):
+    def diff_capability(self):
+        if not self.init:
+            return 1.0
         # Compute current average power and bandwidth and full dataset size
         avg_power = fmean([device.config["compute"] for device in self.devices])
         avg_bandwidth = fmean([fmean([device.config["uplink_rate"], device.config["downlink_rate"]]) for device in self.devices])
         
         # Equation 8 in ShuffleFL
-        staleness_factor = self._staleness_factor(n_transferred_samples)
+        staleness_factor = self._staleness_factor()
         prev_avg_power = self.average_power
         prev_avg_bandwidth = self.average_bandwidth
-        self.diff_capability = fmean(data=[avg_power/prev_avg_power, avg_bandwidth/prev_avg_bandwidth], weights=[staleness_factor, 1-staleness_factor])
 
+        diff_capability = fmean(data=[avg_power/prev_avg_power, avg_bandwidth/prev_avg_bandwidth], weights=[staleness_factor, 1-staleness_factor])
+        
         # Update the average power and bandwidth
         self.average_power = avg_power
         self.average_bandwidth = avg_bandwidth
+
+        return diff_capability
     
     # Implements Equation 9 from ShuffleFL
-    def _staleness_factor(self, n_transferred_samples):
+    def _staleness_factor(self):
         dataset_size = sum([len(device.dataset) for device in self.devices])
         data_processed = 3 * dataset_size
 
         # Compute the staleness factor
-        return data_processed / (data_processed + n_transferred_samples)
+        return data_processed / (data_processed + self.n_transferred_samples)
     
     def _create_kd_dataset(self, percentage=0.2):
         self.kd_dataset = self._sample_devices(percentage)
     
-    # TODO: this function should have as parameter the uplink rate of the device
+    # TODO: Have as parameter the uplink rate of the devices
     def _compute_centroids(self):
         dataset = self._sample_devices(.1)
         features = np.array(dataset["img"]).reshape(len(dataset), -1)
@@ -261,5 +258,18 @@ class User():
         return len(self.kd_dataset)
 
     def validate(self):
-        # TODO: Use the testset also to validate and test the users
-        pass
+        net = self.model()
+        checkpoint = torch.load(f"checkpoints/user_{self.id}/user.pt")
+        net.load_state_dict(checkpoint['model_state_dict'])
+        net.eval()
+        to_tensor = torchvision.transforms.ToTensor()
+        dataset = self.testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+        valloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False)
+        correct, total = 0, 0
+        with torch.no_grad():
+            for batch in valloader:
+                images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+                outputs = net(images)
+                correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
+                total += labels.size(0)
+        return correct / total

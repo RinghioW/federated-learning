@@ -26,9 +26,8 @@ class Server():
         torch.save({'model_state_dict': avg_state_dict}, "checkpoints/server/server.pt")
 
     # Evaluate the server model on the test set
-    # TODO: Find a way to compare this evaluation to some other H-FL method
     # TODO: Compare with FedProx as a way to combat statistical heterogeneity
-    def test(self, testset):
+    def test(self, testset, init=True):
         to_tensor = torchvision.transforms.ToTensor()
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)
@@ -36,8 +35,6 @@ class Server():
         if self.init:
             checkpoint = torch.load("checkpoints/server/server.pt")
             net.load_state_dict(checkpoint['model_state_dict'])
-        else:
-            self.init = True
         net.eval()
         
         """Evaluate the network on the entire test set."""
@@ -58,7 +55,7 @@ class Server():
     # Equation 10 in ShuffleFL
     def _send_adaptive_scaling_factor(self):
         # Compute estimated performances of the users
-        estimated_performances = [user.diff_capability * training_time for user, training_time in zip(self.users, self.wall_clock_training_times)]
+        estimated_performances = [user.diff_capability() * training_time for user, training_time in zip(self.users, self.wall_clock_training_times)]
 
         # Compute average user performance
         avg_user_performance = fmean(estimated_performances)
@@ -68,7 +65,6 @@ class Server():
             user.adaptive_scaling_factor = (avg_user_performance / performance) * self.scaling_factor
 
     # Select users for the next round of training
-    # TODO: Consider tier-based selection (TiFL) instead of random selection
     def _select_users(self, split=1.):
         # TODO: Select users
         pass
@@ -80,21 +76,28 @@ class Server():
         self.wall_clock_training_times = [1.] * len(self.users)
 
     def _poll_users(self, kd_epochs, on_device_epochs, adapt=True, shuffle=True):
+        transferred_samples = []
         for user in self.users:
-
             # User trains devices
             # ShuffleFL step 11-15
-            user.train(kd_epochs, on_device_epochs)
-    
+            n_transferred_samples = user.train(kd_epochs, on_device_epochs)
+            transferred_samples.append(n_transferred_samples)
+            print(f"User {user.id} accuracy: {user.validate()}")
+        return transferred_samples
+
     def train(self):
         # Choose the users for the next round of training
         self._select_users()
 
         # Send the adaptive scaling factor to the users
-        self._send_adaptive_scaling_factor()
+        if self.init:
+            self._send_adaptive_scaling_factor()
 
         # Wait for users to send their model
         self._poll_users(kd_epochs=10, on_device_epochs=10)
 
         # Aggregate the updates from the users
         self._aggregate_updates()
+
+        if not self.init:
+            self.init = True

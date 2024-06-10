@@ -36,7 +36,7 @@ def main():
     else:
         raise ValueError(f"Dataset {dataset} not implemented")
 
-    users = [User(id=i, devices=[Device(j) for j in range(num_devices//num_users)]) for i in range(num_users)]
+    users = [User(id=i, devices=[Device(j) for j in range(num_devices//num_users)], testset=testset) for i in range(num_users)]
     model = AdaptiveNet
     server = Server(dataset, model, users)
 
@@ -45,7 +45,7 @@ def main():
     # Evaluate the server model before training
     losses = []
     accuracies = []
-    initial_loss, initial_accuracy = server.test(testset)
+    initial_loss, initial_accuracy = server.test(testset, init=False)
     losses.append(initial_loss)
     accuracies.append(initial_accuracy)
 

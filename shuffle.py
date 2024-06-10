@@ -40,7 +40,6 @@ def _extract(dataset, cluster_labels, target_cluster, n_samples):
     return datasets.Dataset.from_list(dataset), cluster_labels, matches
 
 # Insert samples of cluster label into the dataset
-# TODO : dataset is a Dataset object and should return so
 def _insert(dataset, cluster_labels, samples, target_label):
     dataset = list(dataset)
     for sample in samples:

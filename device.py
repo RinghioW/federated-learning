@@ -10,8 +10,7 @@ class Device():
         self.config = None
 
         self.dataset = None
-        self.valset = None # TODO: Figure out how to use this
-        # TODO: add testset from the server to the devices for consistent evaluation
+        self.valset = None
 
         self.model = None # Model class (NOT instance)
         self.model_params = None
@@ -116,7 +115,7 @@ class Device():
     def resources(self):
         return self.config["compute"] + self.config["memory"] + self.config["energy_budget"]
 
-    # TODO: Figure out how to characterize the devices in a way that makes sense
+    # TODO: Characterize the devices in a way that makes sense
     # The higher these numbers are, the higher the latency factor will be
     # If the latency is really high, this means that SL >> DI,
     # Meaning that data imbalance will not be accounted for
