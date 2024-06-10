@@ -11,6 +11,7 @@ from sklearn.cluster import KMeans
 from optimize import optimize_transmission_matrices
 from shuffle import shuffle_data
 from statistics import fmean
+
 class User():
     def __init__(self, id, devices, n_classes=NUM_CLASSES) -> None:
         self.id = id
@@ -18,6 +19,7 @@ class User():
         self.kd_dataset: datasets.Dataset = None
         self.model = None
 
+        # TODO: add testset from the server to validate the users consistently
         # SHUFFLE-FL
 
         # Transition matrix of ShuffleFL of size (floor{number of classes * shrinkage ratio}, number of devices + 1)
@@ -65,7 +67,7 @@ class User():
             device.adapt(model, params, path)
     
     # Train the user model using knowledge distillation
-    def _aggregate_updates(self, learning_rate=0.0001, epochs=10, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
+    def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
         if self.init:
@@ -77,6 +79,9 @@ class User():
         student.train()
 
         # TODO : Train in parallel, not sequentially (?)
+
+        # TODO : option 1 -> each device acts as a teacher separately
+        # TODO : option 2 -> average the teacher logits from all devices
         teachers = [] 
         for device in self.devices:
             teacher = device.model()
@@ -114,6 +119,9 @@ class User():
                 #Soften the student logits by applying softmax first and log() second
                 # Compute the mean of the teacher logits received from all devices
                 # TODO: Does the mean make sense?
+
+                # TODO: test whether aggregating the logits or keeping them separate works best
+                # Because the KD is with multiple teachers, not only one teacher
                 averaged_teacher_logits = torch.mean(torch.stack(teacher_logits), dim=0)
                 soft_targets = torch.nn.functional.softmax(averaged_teacher_logits / T, dim=-1)
                 soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
@@ -141,7 +149,7 @@ class User():
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
-    def train(self, epochs=5, verbose=True):
+    def train(self, kd_epochs, on_device_epochs):
         # Adapt the model
         self._adapt_model(self.model)
 
@@ -149,7 +157,8 @@ class User():
 
         # Train the devices
         for device in self.devices:
-            device.train(epochs, verbose)
+            device.train(on_device_epochs)
+            print(f"Device {device.config['id']} validation accuracy: {device.validate():.3f}")
 
         # Update the average capability
         self._update_average_capability(n_transferred_samples)
@@ -158,7 +167,7 @@ class User():
         self._create_kd_dataset()
 
         # Aggregate the updates
-        self._aggregate_updates()
+        self._aggregate_updates(epochs=kd_epochs)
 
     # Implements section 4.4 from ShuffleFL
     def _reduce_dimensionality(self):
@@ -248,3 +257,9 @@ class User():
             dataset.extend(device.sample(percentage))
         return datasets.Dataset.from_list(dataset)
 
+    def n_samples(self):
+        return len(self.kd_dataset)
+
+    def validate(self):
+        # TODO: Use the testset also to validate and test the users
+        pass

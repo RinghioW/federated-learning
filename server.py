@@ -15,19 +15,19 @@ class Server():
     # In this case, averaging the weights will be sufficient
     # Step 18 in the ShuffleFL algorithm
     def _aggregate_updates(self):
-        sum_weights = torch.load(f"checkpoints/user_0/user.pt")['model_state_dict']
-        for user in self.users[1:]:
-            state_dict = torch.load(f"checkpoints/user_{user.id}/user.pt")['model_state_dict']
-            for key, val in state_dict.items():
-                sum_weights[key] += val
-        for key in sum_weights:
-            sum_weights[key] = type(sum_weights[key])(sum_weights[key] * (1/len(self.users)))
-        
+        # Load the first user model
+        state_dicts = [torch.load(f"checkpoints/user_{i}/user.pt")['model_state_dict'] for i in range(len(self.users))]
+        n_samples = [user.n_samples() for user in self.users]
+        total_samples = sum(n_samples)
+        avg_state_dict = {}
+        for key in state_dicts[0].keys():
+            avg_state_dict[key] = torch.stack([state_dict[key].float() * (n / total_samples) for state_dict, n in zip(state_dicts, n_samples)], dim=0).mean(dim=0)
         # Save the aggregated weights
-        torch.save({'model_state_dict': sum_weights}, "checkpoints/server/server.pt")
+        torch.save({'model_state_dict': avg_state_dict}, "checkpoints/server/server.pt")
 
     # Evaluate the server model on the test set
     # TODO: Find a way to compare this evaluation to some other H-FL method
+    # TODO: Compare with FedProx as a way to combat statistical heterogeneity
     def test(self, testset):
         to_tensor = torchvision.transforms.ToTensor()
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
@@ -79,12 +79,12 @@ class Server():
         # self.users = random.choices(users, k=math.floor(split*len(users)))
         self.wall_clock_training_times = [1.] * len(self.users)
 
-    def _poll_users(self, adapt=True, shuffle=True, on_device_epochs=10):
+    def _poll_users(self, kd_epochs, on_device_epochs, adapt=True, shuffle=True):
         for user in self.users:
 
             # User trains devices
             # ShuffleFL step 11-15
-            user.train(epochs=on_device_epochs, verbose=True)
+            user.train(kd_epochs, on_device_epochs)
     
     def train(self):
         # Choose the users for the next round of training
@@ -94,7 +94,7 @@ class Server():
         self._send_adaptive_scaling_factor()
 
         # Wait for users to send their model
-        self._poll_users()
+        self._poll_users(kd_epochs=10, on_device_epochs=10)
 
         # Aggregate the updates from the users
         self._aggregate_updates()

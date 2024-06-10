@@ -1,18 +1,15 @@
-from numpy import array_split
 from argparse import ArgumentParser
 from time import time
 from datetime import timedelta
 from device import Device
 from user import User
 from server import Server
-from config import Style
-from plots import plot_results
 from adaptivenet import AdaptiveNet
+import plots
 def main():
-
+    
     # Define arguments
-    parser = ArgumentParser(description=f"{Style.GREEN}Heterogeneous federated learning framework using pytorch{Style.GREEN}")
-    print(parser.description)
+    parser = ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch")
 
     parser.add_argument("-u", "--users", dest="users", type=int, default=4, help="Total number of users (default: 2)")
     parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices (default: 6)")
@@ -30,10 +27,7 @@ def main():
     shuffle = args.shuffle
     adapt = args.adapt
 
-    if not shuffle:
-        results_dir = "results/no-shuffle/"
-    else:
-        results_dir = "results/final/"
+    results_dir = "results/final/"
 
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
@@ -54,11 +48,8 @@ def main():
     initial_loss, initial_accuracy = server.test(testset)
     losses.append(initial_loss)
     accuracies.append(initial_accuracy)
-    print(f"{Style.YELLOW}------------\nS, e0 - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}\n------------{Style.RESET}")
-    
-    latency_histories = [[] for _ in range(num_users)]
-    data_imbalance_histories = [[] for _ in range(num_users)]
-    obj_functions = [[] for _ in range(num_users)]
+
+    print(f"S, e0 - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}")
     
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
@@ -79,14 +70,14 @@ def main():
         losses.append(loss)
         accuracies.append(accuracy)
 
-        print(f"{Style.YELLOW}------------\nS, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}\n------------{Style.RESET}")
+        print(f"S, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
 
 
     time_end = time()
-    print(f"{Style.GREEN}Elapsed Time: {str(timedelta(seconds=time_end - time_start))}{Style.RESET}")
+    print(f"Elapsed Time: {str(timedelta(seconds=time_end - time_start))}")
     
     # Save the results
-    plot_results(results_dir, num_users, latency_histories, data_imbalance_histories, obj_functions, losses, accuracies)
+    plots.plot_training("results/final/server/", losses, accuracies)
 
 
 if __name__ == "__main__":

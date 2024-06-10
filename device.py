@@ -3,6 +3,7 @@ from config import DEVICE
 import numpy as np
 import math
 import torchvision.transforms as transforms
+
 class Device():
     def __init__(self, id) -> None:
         self.id = id
@@ -10,6 +11,7 @@ class Device():
 
         self.dataset = None
         self.valset = None # TODO: Figure out how to use this
+        # TODO: add testset from the server to the devices for consistent evaluation
 
         self.model = None # Model class (NOT instance)
         self.model_params = None
@@ -24,14 +26,14 @@ class Device():
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
     
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
-    def train(self, epochs=10, verbose=False):
+    def train(self, epochs):
         if len(self.dataset) == 0:
             return
 
         print(f"Device {self.config['id']} - Training on {len(self.dataset)} samples")
         # Load the model
         net = self.model(**self.model_params)
-        optimizer = torch.optim.Adam(net.parameters())
+        optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
 
         if self.has_checkpoint:
             checkpoint = torch.load(self.path + f"device_{self.config['id']}.pt")
@@ -63,8 +65,7 @@ class Device():
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
             epoch_loss /= len(trainloader.dataset)
             epoch_acc = correct / total
-            if verbose:
-                print(f"D{self.config['id']}, e{epoch+1} - Loss: {epoch_loss: .4f}, Accuracy: {epoch_acc: .3f}")
+            print(f"D{self.config['id']}, e{epoch+1} - Loss: {epoch_loss: .4f}, Accuracy: {epoch_acc: .3f}")
 
         # Save the model
         torch.save({
@@ -92,6 +93,25 @@ class Device():
         self.model = model
         self.model_params = params
         self.path = path
+
+    def validate(self):
+        if self.valset is None:
+            return 0
+        net = self.model(**self.model_params)
+        checkpoint = torch.load(self.path + f"device_{self.config['id']}.pt")
+        net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
+        net.eval()
+        to_tensor = transforms.ToTensor()
+        dataset = self.valset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+        valloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False)
+        correct, total = 0, 0
+        with torch.no_grad():
+            for batch in valloader:
+                images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+                outputs = net(images)
+                correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
+                total += labels.size(0)
+        return correct / total
 
     def resources(self):
         return self.config["compute"] + self.config["memory"] + self.config["energy_budget"]

@@ -1,6 +1,6 @@
 from metrics import data_imbalances, latencies
 import math
-from config import STD_CORRECTION, Style
+from config import STD_CORRECTION
 import numpy as np
 from scipy.optimize import minimize
 
@@ -77,7 +77,7 @@ def optimize_transmission_matrices(transition_matrices,
     
     # Update the transition matrices
     if not result.success:
-        print(f"{Style.RED}[ERROR]{Style.RESET} Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
+        print(f"Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
     
     return result.x.reshape((n_devices, n_clusters, n_devices))
 
