@@ -1,6 +1,5 @@
 from metrics import data_imbalances, latencies
 import math
-from config import STD_CORRECTION
 import numpy as np
 from scipy.optimize import minimize
 
@@ -8,24 +7,13 @@ from scipy.optimize import minimize
 # It's needed to compute data imbalance and optimize the data shuffling
 
 # Function for optimizing equation 7 from ShuffleFL
-def optimize_transmission_matrices(transition_matrices,
-                                   n_devices, 
-                                   n_clusters,
-                                    adaptive_scaling_factor, 
-                                    cluster_distributions, 
-                                    uplinks, 
-                                    downlinks, 
-                                    computes):
-    # Define the objective function to optimize
-    # Takes as an input the transfer matrices
+def optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes):
     # Returns as an output the result of Equation 7
-
-    for m in transition_matrices:
-        if m is None:
-            transition_matrices = np.random.rand(n_devices, n_clusters, n_devices)
-            sums = np.sum(transition_matrices, axis=2)
-            transition_matrices = transition_matrices / sums[:, :, np.newaxis]
-            break
+    n_devices = len(cluster_distributions)
+    n_clusters = len(cluster_distributions[0])
+    transition_matrices = np.random.rand(n_devices, n_clusters, n_devices)
+    sums = np.sum(transition_matrices, axis=2)
+    transition_matrices = transition_matrices / sums[:, :, np.newaxis]
 
     transition_matrices = np.array(transition_matrices)
 
@@ -40,8 +28,8 @@ def optimize_transmission_matrices(transition_matrices,
         # The factor of STD_CORRECTION was introduced to increase by an order of magnitude the importance of the time std
         # Time std is usually very small and the max time is usually very large
         # But a better approach would be to normalize the values or take the square of the std
-        system_latency = STD_CORRECTION*np.std(latencies) + np.max(latencies)
-        data_imbalance = adaptive_scaling_factor*np.max(data_imbalances)
+        system_latency = np.amax(latencies)
+        data_imbalance = adaptive_scaling_factor*np.mean(data_imbalances)
         obj_func = system_latency + data_imbalance
 
         # Save the objective function for plotting

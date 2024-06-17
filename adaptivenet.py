@@ -18,6 +18,7 @@ class AdaptiveNet(nn.Module):
             # TODO: Figure out what to do here
             pass
         self.conv1 = nn.Conv2d(3, 6, 5)
+        self.batchnorm = nn.BatchNorm2d(6)
         self.pool = nn.MaxPool2d(2, 2)
         self.conv2 = nn.Conv2d(6, 16, 5)
         if pruning_factor > 0.:
@@ -28,6 +29,7 @@ class AdaptiveNet(nn.Module):
             self.fc1 = prune.ln_structured(module=self.fc1, name="weight", amount=pruning_factor, n=2, dim=0)
             self.fc1 = prune.remove(self.fc1, name="weight")
         self.fc2 = nn.Linear(120, 84)
+        self.batchnorm2 = nn.BatchNorm1d(84)
         self.fc3 = nn.Linear(84, 10)
 
         if quantize:
@@ -35,10 +37,10 @@ class AdaptiveNet(nn.Module):
     
     
     def forward(self, x):
-        x = self.pool(torch.relu(self.conv1(x)))
-        x = self.pool(torch.relu(self.conv2(x)))
+        x = self.pool(torch.relu(self.batchnorm(self.conv1(x))))
+        x = self.pool(torch.relu(self.batchnorm(self.conv2(x))))
         x = x.reshape(-1, 16 * 5 * 5)
         x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
+        x = torch.relu(self.batchnorm2(self.fc2(x)))
         x = self.fc3(x)
         return x

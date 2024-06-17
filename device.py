@@ -5,12 +5,12 @@ import math
 import torchvision.transforms as transforms
 
 class Device():
-    def __init__(self, id) -> None:
+    def __init__(self, id, dataset=None, valset=None) -> None:
         self.id = id
-        self.config = None
+        self.config = Device.generate_config(id)
 
-        self.dataset = None
-        self.valset = None
+        self.dataset = dataset
+        self.valset = valset
 
         self.model = None # Model class (NOT instance)
         self.model_params = None
@@ -20,6 +20,10 @@ class Device():
         self.transition_matrix = None
 
         self.clusters = None # Clustered labels
+
+        self.training_losses = []
+        self.training_accuracies = []
+        self.validation_accuracies = []
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
@@ -59,11 +63,13 @@ class Device():
                 loss.backward()
                 optimizer.step()
                 # Metrics
-                epoch_loss += loss
+                epoch_loss += loss.item()
                 total += labels.size(0)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
             epoch_loss /= len(trainloader.dataset)
             epoch_acc = correct / total
+            self.training_losses.append(epoch_loss)
+            self.training_accuracies.append(epoch_acc)
             print(f"D{self.config['id']}, e{epoch+1} - Loss: {epoch_loss: .4f}, Accuracy: {epoch_acc: .3f}")
 
         # Save the model
@@ -110,6 +116,7 @@ class Device():
                 outputs = net(images)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
+        self.validation_accuracies.append(correct / total)
         return correct / total
 
     def resources(self):

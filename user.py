@@ -1,9 +1,7 @@
 import torch
-import torch.nn as nn
 import numpy as np
 from config import DEVICE, NUM_CLASSES
 import math
-import random
 import torchvision
 import datasets
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -11,7 +9,6 @@ from sklearn.cluster import KMeans
 from optimize import optimize_transmission_matrices
 from shuffle import shuffle_data
 from statistics import fmean
-
 class User():
     def __init__(self, id, devices, testset, n_classes=NUM_CLASSES) -> None:
         self.id = id
@@ -40,6 +37,9 @@ class User():
 
         self.init = False
         self.testset = testset
+        self.training_losses = []
+        self.training_accuracies = []
+        self.test_accuracies = []
 
 
     def __repr__(self) -> str:
@@ -69,14 +69,10 @@ class User():
     # Train the user model using knowledge distillation
     def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model()
-        optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
-        if self.init:
-            checkpoint = torch.load(f"checkpoints/user_{self.id}/user.pt")
-            student.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        else:
-            self.init = True
+        checkpoint = torch.load(f"checkpoints/server.pt")
+        student.load_state_dict(checkpoint['model_state_dict'])
         student.train()
+        optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
         # TODO : Train in parallel, not sequentially (?)
         # option 1 -> each device acts as a teacher separately
@@ -135,6 +131,8 @@ class User():
                 running_kd_loss += soft_targets_loss.item()
                 running_ce_loss += label_loss.item()
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
+            self.training_losses.append(running_loss / len(train_loader.dataset))
+            self.training_accuracies.append(running_accuracy / len(train_loader.dataset))
             print(f"U{self.id}, e{epoch+1} - Loss: {(running_loss / len(train_loader.dataset)): .4f}, Accuracy: {(running_accuracy / len(train_loader.dataset)): .3f}")
         
         # Save the model for checkpointing
@@ -174,15 +172,12 @@ class User():
 
         # User optimizes the transmission matrices
         # ShuffleFL step 9
-        n_devices = len(self.devices)
-        n_clusters = math.floor(NUM_CLASSES * self.shrinkage_ratio)
         adaptive_scaling_factor = self.adaptive_scaling_factor
         cluster_distributions = [device.cluster_distribution() for device in self.devices]
         uplinks = [device.config["uplink_rate"] for device in self.devices]
         downlinks = [device.config["downlink_rate"] for device in self.devices]
         computes = [device.config["compute"] for device in self.devices]
-        transition_matrices = [device.transition_matrix for device in self.devices]
-        opt_transition_matrices = optimize_transmission_matrices(transition_matrices, n_devices, n_clusters, adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes)
+        opt_transition_matrices = optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes)
 
         # Shuffle the data and update the transition matrices
         # Implements Equation 1 from ShuffleFL
@@ -272,4 +267,5 @@ class User():
                 outputs = net(images)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
+        self.test_accuracies.append(correct / total)
         return correct / total

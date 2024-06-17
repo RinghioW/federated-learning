@@ -3,8 +3,10 @@ from scipy.spatial.distance import jensenshannon
 
 # Returns the data imbalance for a distribution
 def _data_imbalance(distribution):
-    n_classes = len(distribution)
     n_samples = sum(distribution)
+    if n_samples == 0:
+        return 0
+    n_classes = len(distribution)
     avg_samples = n_samples / n_classes
     reference_distribution = [avg_samples] * n_classes
 

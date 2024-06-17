@@ -5,6 +5,7 @@ from statistics import fmean
 class Server():
     def __init__(self, dataset, model, users):
         self.model = model
+        torch.save({'model_state_dict': model().state_dict()}, "checkpoints/server.pt")
         self.dataset = dataset
         self.users = users
         self.wall_clock_training_times = None
@@ -21,9 +22,9 @@ class Server():
         total_samples = sum(n_samples)
         avg_state_dict = {}
         for key in state_dicts[0].keys():
-            avg_state_dict[key] = torch.stack([state_dict[key].float() * (n / total_samples) for state_dict, n in zip(state_dicts, n_samples)], dim=0).mean(dim=0)
+            avg_state_dict[key] = sum([state_dict[key] * n_samples[i] for i, state_dict in enumerate(state_dicts)]) / total_samples
         # Save the aggregated weights
-        torch.save({'model_state_dict': avg_state_dict}, "checkpoints/server/server.pt")
+        torch.save({'model_state_dict': avg_state_dict}, "checkpoints/server.pt")
 
     # Evaluate the server model on the test set
     # TODO: Compare with FedProx as a way to combat statistical heterogeneity
@@ -32,9 +33,8 @@ class Server():
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)
         net = self.model()
-        if self.init:
-            checkpoint = torch.load("checkpoints/server/server.pt")
-            net.load_state_dict(checkpoint['model_state_dict'])
+        checkpoint = torch.load("checkpoints/server.pt")
+        net.load_state_dict(checkpoint['model_state_dict'])
         net.eval()
         
         """Evaluate the network on the entire test set."""
