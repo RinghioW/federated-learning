@@ -1,28 +1,28 @@
 import matplotlib.pyplot as plt
+ctr = 0
+def plot_optimization(latency_history, data_imbalance_history, obj_function_history):
+    global ctr
+    plt.title("Latency")
+    plt.xlabel("Iteration")
+    plt.ylabel("Latency")
+    plt.plot(latency_history)
+    plt.savefig(f"results/latency_{ctr}.png")
+    plt.close()
 
-def plot_optimization(dir, latency_histories, data_imbalance_histories, obj_function_histories, losses, accuracies):
-    # Plot latency and data imbalance
-    for idx, data_imbalance, latency, obj_function in enumerate(zip(data_imbalance_histories, latency_histories, obj_function_histories)):
-        plt.plot(latency)
-        plt.title(f"Latency for User {idx}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Latency")
-        plt.savefig(dir + f"latency_user_{idx}.png")
-        plt.close()
+    plt.title("Data Imbalance")
+    plt.xlabel("Iteration")
+    plt.ylabel("Data Imbalance")
+    plt.plot(data_imbalance_history)
+    plt.savefig(f"results/data_imbalance_{ctr}.png")
+    plt.close()
 
-        plt.plot(data_imbalance)
-        plt.title(f"Data Imbalance for User {idx}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Imbalance")
-        plt.savefig(dir + f"data_imbalance_user_{idx}.png")
-        plt.close()
-
-        plt.plot(obj_function)
-        plt.title(f"Objective Function for User {idx}")
-        plt.xlabel("Epoch")
-        plt.ylabel("Objective Function")
-        plt.savefig(dir + f"objective_function_user_{idx}.png")
-        plt.close()
+    plt.title("Objective Function")
+    plt.xlabel("Iteration")
+    plt.ylabel("Objective Function")
+    plt.plot(obj_function_history)
+    plt.savefig(f"results/objective_function_{ctr}.png")
+    plt.close()
+    ctr += 1
 
 def plot_devices(users):
     plt.title("Training Loss")
