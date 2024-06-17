@@ -32,7 +32,8 @@ def main():
     else:
         raise ValueError(f"Dataset {dataset} not implemented")
 
-    users = [User(id=i, devices=[Device(j, trainsets.pop(), valsets.pop()) for j in range(num_devices//num_users)], testset=testset) for i in range(num_users)]
+    devices_per_user = num_devices // num_users
+    users = [User(id=i, devices=[Device(j+(devices_per_user*i), trainsets.pop(), valsets.pop()) for j in range(devices_per_user)], testset=testset) for i in range(num_users)]
     model = AdaptiveNet
     server = Server(dataset, model, users)
 
@@ -46,33 +47,34 @@ def main():
     accuracies.append(initial_accuracy)
 
     print(f"S, e0 - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}")
-    
-    # Perform federated learning for the server model
-    # Algorithm 1 in ShuffleFL
-    # ShuffleFL step 1, 2
-    for epoch in range(server_epochs):
-        
-        # Server aggregates the updates from the users
-        # ShuffleFL step 18, 19
-        server.train()
-        
-        # Server evaluates the model
-        loss, accuracy = server.test(testset)
+    try:
+        # Perform federated learning for the server model
+        # Algorithm 1 in ShuffleFL
+        # ShuffleFL step 1, 2
+        for epoch in range(server_epochs):
+            
+            # Server aggregates the updates from the users
+            # ShuffleFL step 18, 19
+            server.train()
+            
+            # Server evaluates the model
+            loss, accuracy = server.test(testset)
 
-        losses.append(loss)
-        accuracies.append(accuracy)
+            losses.append(loss)
+            accuracies.append(accuracy)
 
-        print(f"S, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
+            print(f"S, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
+    except Exception as e:
+        print(e)
 
+    finally:
+        time_end = time()
+        print(f"Elapsed Time: {str(timedelta(seconds=time_end - time_start))}")
+        # Plot the results
+        plots.plot_devices(users)
+        plots.plot_users(users)
 
-    time_end = time()
-    print(f"Elapsed Time: {str(timedelta(seconds=time_end - time_start))}")
-    
-    # Plot the results
-    plots.plot_devices(users)
-    plots.plot_users(users)
-
-    plots.plot_server(losses, accuracies)
+        plots.plot_server(losses, accuracies)
 
 if __name__ == "__main__":
     main()

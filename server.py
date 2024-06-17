@@ -17,7 +17,7 @@ class Server():
     # Step 18 in the ShuffleFL algorithm
     def _aggregate_updates(self):
         # Load the first user model
-        state_dicts = [torch.load(f"checkpoints/user_{i}/user.pt")['model_state_dict'] for i in range(len(self.users))]
+        state_dicts = [torch.load(f"checkpoints/user_{i}.pt")['model_state_dict'] for i in range(len(self.users))]
         n_samples = [user.n_samples() for user in self.users]
         total_samples = sum(n_samples)
         avg_state_dict = {}
@@ -82,7 +82,7 @@ class Server():
             # ShuffleFL step 11-15
             n_transferred_samples = user.train(kd_epochs, on_device_epochs)
             transferred_samples.append(n_transferred_samples)
-            print(f"User {user.id} accuracy: {user.validate()}")
+            print(f"User validation {user.id} accuracy: {user.validate()}")
         return transferred_samples
 
     def train(self):

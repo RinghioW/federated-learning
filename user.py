@@ -50,7 +50,6 @@ class User():
     # Constructs a function s.t. device_model = f(user_model, device_resources, device_data_distribution)
     def _adapt_model(self, model):
         self.model = model
-        path = f"checkpoints/user_{self.id}/"
 
         for device in self.devices:
             resources = device.resources()
@@ -64,7 +63,7 @@ class User():
             else:
                 params = {"quantize": False, "pruning_factor": 0.1}
             
-            device.adapt(model, params, path)
+            device.adapt(model, params)
     
     # Train the user model using knowledge distillation
     def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
@@ -80,7 +79,7 @@ class User():
         teachers = [] 
         for device in self.devices:
             teacher = device.model()
-            checkpoint = torch.load(device.path + f"device_{device.config['id']}.pt")
+            checkpoint = torch.load(f"checkpoints/device_{device.config['id']}.pt")
             teacher.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
             teacher.eval()
             teachers.append(teacher)
@@ -133,10 +132,9 @@ class User():
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
             self.training_losses.append(running_loss / len(train_loader.dataset))
             self.training_accuracies.append(running_accuracy / len(train_loader.dataset))
-            print(f"U{self.id}, e{epoch+1} - Loss: {(running_loss / len(train_loader.dataset)): .4f}, Accuracy: {(running_accuracy / len(train_loader.dataset)): .3f}")
         
         # Save the model for checkpointing
-        torch.save({'model_state_dict': student.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, f"checkpoints/user_{self.id}/user.pt")
+        torch.save({'model_state_dict': student.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, f"checkpoints/user_{self.id}.pt")
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
@@ -254,7 +252,7 @@ class User():
 
     def validate(self):
         net = self.model()
-        checkpoint = torch.load(f"checkpoints/user_{self.id}/user.pt")
+        checkpoint = torch.load(f"checkpoints/user_{self.id}.pt")
         net.load_state_dict(checkpoint['model_state_dict'])
         net.eval()
         to_tensor = torchvision.transforms.ToTensor()

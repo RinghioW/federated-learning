@@ -30,7 +30,7 @@ def plot_devices(users):
     plt.ylabel("Loss")
     for user in users:
         for device in user.devices:
-            plt.plot(device.training_losses, label=f"U{user.id} D{device.config['id']}")
+            plt.plot(device.training_losses, label=f"D{device.config['id']}")
     plt.legend()
     plt.savefig("results/devices_training_loss.png")
     plt.close()
@@ -40,7 +40,7 @@ def plot_devices(users):
     plt.ylabel("Accuracy")
     for user in users:
         for device in user.devices:
-            plt.plot(device.training_accuracies, label=f"U{user.id} D{device.config['id']}")
+            plt.plot(device.training_accuracies, label=f"D{device.config['id']}")
     plt.legend()
     plt.savefig("results/devices_training_accuracy.png")
     plt.close()
@@ -50,7 +50,7 @@ def plot_devices(users):
     plt.ylabel("Accuracy")
     for user in users:
         for device in user.devices:
-            plt.plot(device.validation_accuracies, label=f"U{user.id} D{device.config['id']}")
+            plt.plot(device.validation_accuracies, label=f"D{device.config['id']}")
     plt.legend()
     plt.savefig("results/devices_test_accuracy.png")
     plt.close()

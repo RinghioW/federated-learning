@@ -14,7 +14,6 @@ class Device():
 
         self.model = None # Model class (NOT instance)
         self.model_params = None
-        self.path = None # Relative path to save the model
         self.has_checkpoint = False
 
         self.transition_matrix = None
@@ -33,13 +32,12 @@ class Device():
         if len(self.dataset) == 0:
             return
 
-        print(f"Device {self.config['id']} - Training on {len(self.dataset)} samples")
         # Load the model
         net = self.model(**self.model_params)
         optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
 
         if self.has_checkpoint:
-            checkpoint = torch.load(self.path + f"device_{self.config['id']}.pt")
+            checkpoint = torch.load(f"checkpoints/device_{self.config['id']}.pt")
             net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         else:
@@ -70,13 +68,12 @@ class Device():
             epoch_acc = correct / total
             self.training_losses.append(epoch_loss)
             self.training_accuracies.append(epoch_acc)
-            print(f"D{self.config['id']}, e{epoch+1} - Loss: {epoch_loss: .4f}, Accuracy: {epoch_acc: .3f}")
 
         # Save the model
         torch.save({
             'model_state_dict': net.state_dict(),
             'optimizer_state_dict': optimizer.state_dict()
-        }, self.path + f"device_{self.config['id']}.pt")
+        }, f"checkpoints/device_{self.config['id']}.pt")
 
     
     # Function to sample a sub-dataset from the dataset
@@ -94,16 +91,15 @@ class Device():
     def cluster_distribution(self):
         return np.bincount(self.clusters).tolist()
 
-    def adapt(self, model, params, path):
+    def adapt(self, model, params):
         self.model = model
         self.model_params = params
-        self.path = path
 
     def validate(self):
         if self.valset is None:
             return 0
         net = self.model(**self.model_params)
-        checkpoint = torch.load(self.path + f"device_{self.config['id']}.pt")
+        checkpoint = torch.load(f"checkpoints/device_{self.config['id']}.pt")
         net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
         net.eval()
         to_tensor = transforms.ToTensor()
