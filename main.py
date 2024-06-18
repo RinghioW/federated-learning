@@ -47,34 +47,31 @@ def main():
     accuracies.append(initial_accuracy)
 
     print(f"S, e0 - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}")
-    try:
-        # Perform federated learning for the server model
-        # Algorithm 1 in ShuffleFL
-        # ShuffleFL step 1, 2
-        for epoch in range(server_epochs):
-            
-            # Server aggregates the updates from the users
-            # ShuffleFL step 18, 19
-            server.train()
-            
-            # Server evaluates the model
-            loss, accuracy = server.test(testset)
+    # Perform federated learning for the server model
+    # Algorithm 1 in ShuffleFL
+    # ShuffleFL step 1, 2
+    for epoch in range(server_epochs):
+        
+        # Server aggregates the updates from the users
+        # ShuffleFL step 18, 19
+        server.train()
+        
+        # Server evaluates the model
+        loss, accuracy = server.test(testset)
 
-            losses.append(loss)
-            accuracies.append(accuracy)
+        losses.append(loss)
+        accuracies.append(accuracy)
 
-            print(f"S, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
-    except Exception as e:
-        print(e)
+        print(f"S, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
 
-    finally:
-        time_end = time()
-        print(f"Elapsed Time: {str(timedelta(seconds=time_end - time_start))}")
-        # Plot the results
-        plots.plot_devices(users)
-        plots.plot_users(users)
 
-        plots.plot_server(losses, accuracies)
+    time_end = time()
+    print(f"Elapsed Time: {str(timedelta(seconds=time_end - time_start))}")
+    # Plot the results
+    plots.plot_devices(users)
+    plots.plot_users(users)
+
+    plots.plot_server(losses, accuracies)
 
 if __name__ == "__main__":
     main()

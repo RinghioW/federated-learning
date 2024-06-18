@@ -15,13 +15,14 @@ def optimize_transmission_matrices(adaptive_scaling_factor, cluster_distribution
 
     def objective_function(x):
         tms = x.reshape((n_devices, n_clusters, n_devices))
-
+        sums = np.sum(tms, axis=2)
+        tms = tms / sums[:, :, np.newaxis]
         latencies, data_imbalances = _shuffle_metrics(uplinks, downlinks, computes, tms, cluster_distributions)
 
         latencies = np.array(latencies)
         data_imbalances = np.array(data_imbalances)
 
-        data_imbalance = np.max((data_imbalances-np.min(data_imbalances)) / (np.max(data_imbalances)-np.min(data_imbalances)))
+        data_imbalance = np.mean((data_imbalances-np.min(data_imbalances)) / (np.max(data_imbalances)-np.min(data_imbalances)))
         system_latency = np.max((latencies-np.min(latencies)) / (np.max(latencies)-np.min(latencies)))
         obj_func = system_latency + data_imbalance
 
@@ -29,32 +30,21 @@ def optimize_transmission_matrices(adaptive_scaling_factor, cluster_distribution
 
         return obj_func
 
-    # Sum(row) <= 1
-    # Equivalent to [1 - Sum(row)] >= 0
-    def one_minus_sum_rows(variables):
-        tms = variables.reshape((n_devices, n_clusters, n_devices))
-        return (1. - np.sum(tms, axis=2)).flatten()
-    
     n_variables = n_devices * (n_clusters * n_devices)
-    bounds = [(0.,1.)] * n_variables
-    constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables)}]
+    bounds = [(0.,100.)] * n_variables
     
-    transition_matrices = np.random.rand(n_devices, n_clusters, n_devices)
-    sums = np.sum(transition_matrices, axis=2)
-    transition_matrices = (transition_matrices / sums[:, :, np.newaxis]).flatten()
-
     result = minimize(objective_function,
-                        x0=transition_matrices,
+                        x0=np.random.rand(n_devices, n_clusters, n_devices).flatten(),
                         method='SLSQP', bounds=bounds,
-                        constraints=constraints,
                         options={'maxiter': 50})
     
     # Update the transition matrices
-    if not result.success:
-        print(f"Optimization did not converge after {result.nit} iterations. Status: {result.status} Message: {result.message}")
     objective_function_history.append(result.fun)
     plot_optimization(objective_function_history)
-    return result.x.reshape((n_devices, n_clusters, n_devices))
+    tms = result.x.reshape((n_devices, n_clusters, n_devices))
+    sums = np.sum(tms, axis=2)
+    tms = (tms / sums[:, :, np.newaxis]).tolist()
+    return tms
 
 
 def _shuffle_metrics(uplinks, downlinks, computes, transition_matrices, cluster_distributions):
