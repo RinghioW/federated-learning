@@ -2,7 +2,7 @@ from flwr_datasets import FederatedDataset
 BATCH_SIZE = 32
 
 def load_datasets(num_clients):
-    fds = FederatedDataset(dataset="cifar10", partitioners={"train": num_clients*10})
+    fds = FederatedDataset(dataset="cifar10", partitioners={"train": num_clients})
 
     # Create train/val for each partition and wrap it into DataLoader
     trainsets = []

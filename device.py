@@ -47,11 +47,11 @@ class Device():
 
         to_tensor = transforms.ToTensor()
         dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+        trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True, drop_last=True, num_workers=3)
         """Train the network on the training set."""
         criterion = torch.nn.CrossEntropyLoss()
 
-        for epoch in range(epochs):
+        for _ in range(epochs):
             correct, total, epoch_loss = 0, 0, 0.0
             for batch in trainloader:
                 images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
@@ -104,7 +104,7 @@ class Device():
         net.eval()
         to_tensor = transforms.ToTensor()
         dataset = self.valset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        valloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False)
+        valloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=3)
         correct, total = 0, 0
         with torch.no_grad():
             for batch in valloader:

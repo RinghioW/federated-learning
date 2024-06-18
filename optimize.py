@@ -39,7 +39,7 @@ def optimize_transmission_matrices(adaptive_scaling_factor, cluster_distribution
     
     n_variables = n_devices * (n_clusters * n_devices)
     bounds = [(0.,1.)] * n_variables
-    constraints = [{'type': 'eq', 'fun': lambda variables: one_minus_sum_rows(variables)}]
+    constraints = [{'type': 'ineq', 'fun': lambda variables: one_minus_sum_rows(variables)}]
     
     transition_matrices = np.random.rand(n_devices, n_clusters, n_devices)
     sums = np.sum(transition_matrices, axis=2)

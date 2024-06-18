@@ -85,7 +85,7 @@ class User():
             teachers.append(teacher)
         
         to_tensor = torchvision.transforms.ToTensor()
-        train_loader = torch.utils.data.DataLoader(self.kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, batch_size=32, num_workers=2)
+        train_loader = torch.utils.data.DataLoader(self.kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, drop_last=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
         
         for epoch in range(epochs):
@@ -257,7 +257,7 @@ class User():
         net.eval()
         to_tensor = torchvision.transforms.ToTensor()
         dataset = self.testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        valloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False)
+        valloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=3)
         correct, total = 0, 0
         with torch.no_grad():
             for batch in valloader:
