@@ -1,20 +1,7 @@
 import matplotlib.pyplot as plt
 ctr = 0
-def plot_optimization(latency_history, data_imbalance_history, obj_function_history):
+def plot_optimization(obj_function_history):
     global ctr
-    plt.title("Latency")
-    plt.xlabel("Iteration")
-    plt.ylabel("Latency")
-    plt.plot(latency_history)
-    plt.savefig(f"results/latency_{ctr}.png")
-    plt.close()
-
-    plt.title("Data Imbalance")
-    plt.xlabel("Iteration")
-    plt.ylabel("Data Imbalance")
-    plt.plot(data_imbalance_history)
-    plt.savefig(f"results/data_imbalance_{ctr}.png")
-    plt.close()
 
     plt.title("Objective Function")
     plt.xlabel("Iteration")
