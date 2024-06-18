@@ -64,8 +64,10 @@ class Device():
                 epoch_loss += loss.item()
                 total += labels.size(0)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
-            epoch_loss /= len(trainloader.dataset)
-            epoch_acc = correct / total
+            if len(trainloader.dataset) != 0:
+                epoch_loss /= len(trainloader.dataset)
+            if total != 0:
+                epoch_acc = correct / total
             self.training_losses.append(epoch_loss)
             self.training_accuracies.append(epoch_acc)
 
