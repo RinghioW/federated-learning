@@ -44,6 +44,8 @@ def optimize_transmission_matrices(adaptive_scaling_factor, cluster_distribution
                         method='SLSQP',
                         bounds=[(0.,1.)] * (n_devices * n_clusters * n_devices),
                         options={'maxiter': 50})
+    if not result.success:
+        print(f"WARNING: Optimization did not converge: {result.message} with status {result.status}")
     
     objective_function_history.append(result.fun)
     plot_optimization(objective_function_history)
@@ -93,33 +95,28 @@ def _latencies(uplinks, downlinks, computes, transition_matrices, dataset_distri
     t_computation = _t_computation(computes, dataset_distributions_post_shuffle)
 
     t_total = [sum(t) for t in zip(t_communication, t_computation)]
-    for t in t_total:
-        if not np.isfinite(t):
-            print(f"WARNING: Total latency is not finite: uplinks={uplinks}, downlinks={downlinks}, computes={computes}, transition_matrices={transition_matrices}, dataset_distributions_pre_shuffle={dataset_distributions_pre_shuffle}, dataset_distributions_post_shuffle={dataset_distributions_post_shuffle}")
-        if t < 0:
-            print(f"WARNING: Total latency is negative: uplinks={uplinks}, downlinks={downlinks}, computes={computes}, transition_matrices={transition_matrices}, dataset_distributions_pre_shuffle={dataset_distributions_pre_shuffle}, dataset_distributions_post_shuffle={dataset_distributions_post_shuffle}")
 
     return t_total
 # Returns a list of latencies for each device
-def _t_computation(computes, dataset_distributions):
-    n_devices = len(dataset_distributions)
+def _t_computation(computes, cluster_distributions):
+    n_devices = len(cluster_distributions)
     t_computation = []
     for d in range(n_devices):
         compute = computes[d]
-        n_samples = sum(dataset_distributions[d])
+        n_samples = sum(cluster_distributions[d])
         t = 3. * n_samples * compute
         t_computation.append(t)
     return t_computation
 
 # Returns a list of latencies for each device
-def _t_communication(uplinks, downlinks, dataset_distributions, transition_matrices):
+def _t_communication(uplinks, downlinks, cluster_distributions, transition_matrices):
     n_devices = len(transition_matrices)
     t_transmission = [0.] * n_devices
     t_reception = [0.] * n_devices
 
     for d in range(n_devices):
         transition_matrix = transition_matrices[d]
-        dataset_distribution = dataset_distributions[d]
+        dataset_distribution = cluster_distributions[d]
         
         uplink = 1. / uplinks[d]
 

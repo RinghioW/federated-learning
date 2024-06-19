@@ -4,13 +4,14 @@ import math
 # Assume that datasets is a list of numpy arrays
 # Implements the transformation described by Equation 1 from ShuffleFL
 def shuffle_data(datasets, clusters, distributions, transition_matrices):
-    n_devices = len(transition_matrices)
+    n_devices = len(distributions)
+    n_clusters = len(distributions[0])
     n_transferred_samples = 0
     for d in range(n_devices):
         transition_matrix = transition_matrices[d]
         distribution = distributions[d]
-        for i in range(len(transition_matrix)):
-            for j in range(len(transition_matrix[0])):
+        for i in range(n_clusters):
+            for j in range(n_devices):
                 if d != j:
                     # Sample class i and send to device j
                     n_samples = math.floor(transition_matrix[i][j] * distribution[i])
