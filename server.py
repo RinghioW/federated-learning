@@ -28,7 +28,7 @@ class Server():
 
     # Evaluate the server model on the test set
     # TODO: Compare with FedProx as a way to combat statistical heterogeneity
-    def test(self, testset, init=True):
+    def test(self, testset):
         to_tensor = torchvision.transforms.ToTensor()
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)

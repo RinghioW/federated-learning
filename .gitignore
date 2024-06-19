@@ -3,5 +3,5 @@
 data/
 results/
 checkpoints/
-*.log
+*log*
 todo*

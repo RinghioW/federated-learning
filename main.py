@@ -42,7 +42,7 @@ def main():
     # Evaluate the server model before training
     losses = []
     accuracies = []
-    initial_loss, initial_accuracy = server.test(testset, init=False)
+    initial_loss, initial_accuracy = server.test(testset)
     losses.append(initial_loss)
     accuracies.append(initial_accuracy)
 
@@ -64,9 +64,7 @@ def main():
 
         print(f"S, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
 
-
-    time_end = time()
-    print(f"Elapsed Time: {str(timedelta(seconds=time_end - time_start))}")
+    print(f"Elapsed Time: {str(timedelta(seconds=time() - time_start))}")
     # Plot the results
     plots.plot_devices(users)
     plots.plot_users(users)

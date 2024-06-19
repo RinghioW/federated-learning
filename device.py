@@ -94,6 +94,7 @@ class Device():
         return np.bincount(self.clusters).tolist()
 
     def adapt(self, model, params):
+        # TODO : Implement this function on-the-fly
         self.model = model
         self.model_params = params
 
