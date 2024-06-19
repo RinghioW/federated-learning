@@ -9,7 +9,7 @@ class Server():
         self.dataset = dataset
         self.users = users
         self.wall_clock_training_times = None
-        self.scaling_factor = 10 ** 5
+        self.scaling_factor = 0.5
         self.init = False
 
     # Aggregate the updates from the users

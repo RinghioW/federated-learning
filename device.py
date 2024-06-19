@@ -128,11 +128,11 @@ class Device():
     @staticmethod
     def generate_config(id):
         return {"id" : id,
-                "compute" : np.random.randint(10**0, 10**1), # Compute capability in FLOPS
-                "memory" : np.random.randint(10**0, 10**1), # Memory capability in Bytes
-                "energy_budget" : np.random.randint(10**0,10**1), # Energy budget in J/hour
-                "uplink_rate" : np.random.randint(10**0,10**1), # Uplink rate in Bps
-                "downlink_rate" : np.random.randint(10**0,10**1) # Downlink rate in Bps
+                "compute" : 1. + np.random.rand(), # Compute capability in FLOPS
+                "memory" : 1. + np.random.rand(), # Memory capability in Bytes
+                "energy_budget" : 1. + np.random.rand(), # Energy budget in J/hour
+                "uplink_rate" : 1. + np.random.rand(), # Uplink rate in Bps
+                "downlink_rate" : 1. + np.random.rand() # Downlink rate in Bps
                 }
     
     def update(self, trainset, valset, config):
