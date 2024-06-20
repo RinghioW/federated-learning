@@ -6,6 +6,7 @@ from user import User
 from server import Server
 from adaptivenet import AdaptiveNet
 import plots
+import os
 def main():
     
     # Define arguments
@@ -45,6 +46,7 @@ def main():
     initial_loss, initial_accuracy = server.test(testset)
     losses.append(initial_loss)
     accuracies.append(initial_accuracy)
+    os.makedirs("checkpoints", exist_ok=True)
 
     print(f"S, e0 - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}")
     # Perform federated learning for the server model

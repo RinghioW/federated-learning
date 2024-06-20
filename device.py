@@ -16,8 +16,6 @@ class Device():
         self.model_params = None
         self.has_checkpoint = False
 
-        self.transition_matrix = None
-
         self.clusters = None # Clustered labels
 
         self.training_losses = []

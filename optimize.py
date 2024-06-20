@@ -4,17 +4,22 @@ from plots import plot_optimization
 from scipy.spatial.distance import jensenshannon
 from sklearn.preprocessing import minmax_scale
 from copy import deepcopy
+from typing import List
 # It's needed to compute data imbalance and optimize the data shuffling
 
 # Function for optimizing equation 7 from ShuffleFL
-def optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes):
+def optimize_transmission_matrices(adaptive_scaling_factor: float,
+                                   cluster_distributions: List[int],
+                                   uplinks: List[float],
+                                   downlinks: List[float],
+                                   computes: List[float]) -> np.ndarray:
 
     n_devices = len(cluster_distributions)
     n_clusters = len(cluster_distributions[0])
 
-    objective_function_history = []
+    objective_function_history: List[float] = []
 
-    def objective(x):
+    def objective(x: np.ndarray) -> float:
         transition_matrices = x.reshape((n_devices, n_clusters, n_devices))
         
         # Normalize the rows
@@ -56,20 +61,23 @@ def optimize_transmission_matrices(adaptive_scaling_factor, cluster_distribution
 
     
 # Returns a list of the dataset clusters after shuffling the data
-def _shuffle_clusters(transition_matrices, cluster_distributions):
+def _shuffle_clusters(transition_matrices: np.ndarray, cluster_distributions: List[int]) -> List[float]:
     n_devices = len(cluster_distributions)
     n_clusters = len(cluster_distributions[0])
-    dataset_distributions_post_shuffle = deepcopy(cluster_distributions)
+    dataset_distributions_post_shuffle = [[float(c) for c in cluster_distribution] for cluster_distribution in cluster_distributions]
     
     for d in range(n_devices):
         transition_matrix = transition_matrices[d]
         cluster_distribution = cluster_distributions[d]
         for i in range(n_clusters):
-            num_samples = cluster_distribution[i]
+            num_samples = float(cluster_distribution[i])
             for j in range(n_devices):
                 if d != j:
                     transmitted_samples = transition_matrix[i][j] * num_samples
                     dataset_distributions_post_shuffle[d][i] -= transmitted_samples
+                    # Edge case where the sum of transmitted samples don't add up exactly to 1
+                    if dataset_distributions_post_shuffle[d][i] < 0. and dataset_distributions_post_shuffle[d][i] > -1e-3:
+                        dataset_distributions_post_shuffle[d][i] = 0.
                     dataset_distributions_post_shuffle[j][i] += transmitted_samples
     
     return dataset_distributions_post_shuffle
@@ -83,7 +91,7 @@ def _data_imbalance(distribution):
     n_classes = len(distribution)
     avg_samples = n_samples / n_classes
     balanced_distribution = [avg_samples] * n_classes
-    js = jensenshannon(balanced_distribution, distribution) ** 2
+    js = jensenshannon(balanced_distribution, distribution)
     return js
 
 
@@ -97,16 +105,9 @@ def _latencies(uplinks, downlinks, computes, transition_matrices, dataset_distri
     t_total = [sum(t) for t in zip(t_communication, t_computation)]
 
     return t_total
-# Returns a list of latencies for each device
+
 def _t_computation(computes, cluster_distributions):
-    n_devices = len(cluster_distributions)
-    t_computation = []
-    for d in range(n_devices):
-        compute = computes[d]
-        n_samples = sum(cluster_distributions[d])
-        t = 3. * n_samples * compute
-        t_computation.append(t)
-    return t_computation
+    return [3. * compute * sum(cluster_distribution) for compute, cluster_distribution in zip(computes, cluster_distributions)]
 
 # Returns a list of latencies for each device
 def _t_communication(uplinks, downlinks, cluster_distributions, transition_matrices):
@@ -126,8 +127,8 @@ def _t_communication(uplinks, downlinks, cluster_distributions, transition_matri
                 if d != j:
                     downlink = 1. / downlinks[j]
                     transferred_samples = transition_matrix[i][j] * num_samples
-                    t_transmission[d] +=  uplink * transferred_samples
+                    t_transmission[d] += uplink * transferred_samples
                     t_reception[j] += downlink * transferred_samples
     
-    t_communication = [t_transmission[i] + t_reception[i] for i in range(n_devices)]
+    t_communication = [sum(t) for t in zip(t_transmission, t_reception)]
     return t_communication

@@ -22,7 +22,7 @@ def shuffle_data(datasets, clusters, distributions, transition_matrices):
 
                     n_transferred_samples += n_samples
     
-    return datasets, clusters, n_transferred_samples
+    return datasets, n_transferred_samples
 
 # Extract an amount of samples of the target cluster from the dataset
 def _extract(dataset, cluster_labels, target_cluster, n_samples):

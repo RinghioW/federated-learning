@@ -27,7 +27,6 @@ class Server():
         torch.save({'model_state_dict': avg_state_dict}, "checkpoints/server.pt")
 
     # Evaluate the server model on the test set
-    # TODO: Compare with FedProx as a way to combat statistical heterogeneity
     def test(self, testset):
         to_tensor = torchvision.transforms.ToTensor()
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")

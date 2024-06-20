@@ -73,7 +73,7 @@ class User():
         student.train()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
-        # TODO : Train in parallel, not sequentially (?)
+        # TODO : Test 2 options
         # option 1 -> each device acts as a teacher separately
         # option 2 -> average the teacher logits from all devices
         teachers = [] 
@@ -175,22 +175,19 @@ class User():
         uplinks = [device.config["uplink_rate"] for device in self.devices]
         downlinks = [device.config["downlink_rate"] for device in self.devices]
         computes = [device.config["compute"] for device in self.devices]
-        opt_transition_matrices = optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes)
+        transition_matrices = optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes)
 
         # Shuffle the data and update the transition matrices
         # Implements Equation 1 from ShuffleFL
         datasets = [device.dataset for device in self.devices]
         clusters = [device.clusters for device in self.devices]
-        res_datasets, res_clusters, n_transferred_samples = shuffle_data(datasets, clusters, cluster_distributions, opt_transition_matrices)
+        res_datasets, n_transferred_samples = shuffle_data(datasets, clusters, cluster_distributions, transition_matrices)
 
         # Update average capability
-        # Update the devices with the new datasets and clusters
-        # TODO: Should clusters and transition matrices be reassigned?
-        for d, dataset, cluster, tm in zip(self.devices, res_datasets, res_clusters, opt_transition_matrices):
-            d.dataset = dataset
-            d.clusters = cluster
-            d.transition_matrix = tm
-
+        # Update the devices with the new datasets
+        for device, dataset in zip(self.devices, res_datasets):
+            device.dataset = dataset
+        
         return n_transferred_samples
 
     # Compute the difference in capability of the user compared to last round
