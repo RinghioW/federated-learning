@@ -1,8 +1,8 @@
 import torch
-from config import DEVICE
 import numpy as np
 import math
 import torchvision.transforms as transforms
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Device():
     def __init__(self, id, dataset=None, valset=None) -> None:
@@ -91,8 +91,10 @@ class Device():
     def cluster_distribution(self):
         return np.bincount(self.clusters).tolist()
 
-    def adapt(self, model, params):
-        # TODO : Implement this function on-the-fly
+    # TODO : Implement this function on-the-fly
+    def adapt(self, model, state_dict, params):
+        
+        
         self.model = model
         self.model_params = params
 

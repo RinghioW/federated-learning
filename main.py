@@ -10,12 +10,12 @@ import os
 def main():
     
     # Define arguments
-    parser = ArgumentParser(description=f"Heterogeneous federated learning framework using pytorch")
+    parser = ArgumentParser(description="Heterogeneous federated learning framework using pytorch")
 
-    parser.add_argument("-u", "--users", dest="users", type=int, default=4, help="Total number of users (default: 2)")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices (default: 6)")
-    parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use (default: cifar10)")
-    parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs (default: 2)")
+    parser.add_argument("-u", "--users", dest="users", type=int, default=4, help="Total number of users")
+    parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices")
+    parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use")
+    parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("--shuffle", dest="shuffle", type=bool, default=True, help="Enable data shuffling")
     parser.add_argument("--adapt", dest="adapt", type=bool, default=True, help="Enable model adaptation")
 

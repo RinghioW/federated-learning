@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-from config import DEVICE, NUM_CLASSES
 import math
 import torchvision
 import datasets
@@ -9,6 +8,10 @@ from sklearn.cluster import KMeans
 from optimize import optimize_transmission_matrices
 from shuffle import shuffle_data
 from statistics import fmean
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+NUM_CLASSES = 10
+
 class User():
     def __init__(self, id, devices, testset, n_classes=NUM_CLASSES) -> None:
         self.id = id
@@ -49,7 +52,12 @@ class User():
     # Implements the adaptation step from ShuffleFL Novelty
     # Constructs a function s.t. device_model = f(user_model, device_resources, device_data_distribution)
     def _adapt_model(self, model):
+        # User gets the same model as the server
         self.model = model
+
+        # Devices adapt the user model according to their capabilities
+        state_dict = torch.load("checkpoints/server.pt")["model_state_dict"]
+        # State dict is reduced for adapting the layers
 
         for device in self.devices:
             resources = device.resources()
@@ -68,7 +76,7 @@ class User():
     # Train the user model using knowledge distillation
     def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model()
-        checkpoint = torch.load(f"checkpoints/server.pt")
+        checkpoint = torch.load("checkpoints/server.pt")
         student.load_state_dict(checkpoint['model_state_dict'])
         student.train()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)

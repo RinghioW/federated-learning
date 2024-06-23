@@ -2,8 +2,6 @@ import numpy as np
 from scipy.optimize import minimize
 from plots import plot_optimization
 from scipy.spatial.distance import jensenshannon
-from sklearn.preprocessing import minmax_scale
-from copy import deepcopy
 from typing import List
 # It's needed to compute data imbalance and optimize the data shuffling
 
@@ -18,29 +16,26 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
     n_clusters = len(cluster_distributions[0])
 
     objective_function_history: List[float] = []
+    latency_history: List[float] = []
+    data_imbalance_history: List[float] = []
 
     def objective(x: np.ndarray) -> float:
-        transition_matrices = x.reshape((n_devices, n_clusters, n_devices))
-        
-        # Normalize the rows
-        transition_matrices = transition_matrices / np.sum(transition_matrices, axis=2, keepdims=True)
+        transition_matrices = _tms_from_flat_unnormalized(x, n_devices, n_clusters)
 
         # Compute latencies and data imbalances
         cluster_distributions_post_shuffle = _shuffle_clusters(transition_matrices, cluster_distributions)
 
-        data_imbalances = [_data_imbalance(c) for c in cluster_distributions_post_shuffle]
-        latencies = _latencies(uplinks, downlinks, computes, transition_matrices, cluster_distributions, cluster_distributions_post_shuffle)
+        data_imbalances = np.array([_data_imbalance(c) for c in cluster_distributions_post_shuffle])
+        latencies = np.array(_latencies(uplinks, downlinks, computes, transition_matrices, cluster_distributions, cluster_distributions_post_shuffle))
 
-        # Min-max normalization in [0, 1]
-        latencies = minmax_scale(latencies)
-        data_imbalances = minmax_scale(data_imbalances)
 
         data_imbalance = np.mean(data_imbalances)
         system_latency = np.amax(latencies)
-        obj_func = (1. - adaptive_scaling_factor)*system_latency + adaptive_scaling_factor*data_imbalance
-
+        # obj_func = (1. - adaptive_scaling_factor)*system_latency + adaptive_scaling_factor*data_imbalance
+        obj_func = system_latency + data_imbalance
         objective_function_history.append(obj_func)
-
+        latency_history.append(system_latency)
+        data_imbalance_history.append(data_imbalance)
         return obj_func
 
     
@@ -52,11 +47,18 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
     if not result.success:
         print(f"WARNING: Optimization did not converge: {result.message} with status {result.status}")
     
-    objective_function_history.append(result.fun)
-    plot_optimization(objective_function_history)
+    plot_optimization(objective_function_history, latency_history, data_imbalance_history, adaptive_scaling_factor)
 
-    transition_matrices = result.x.reshape((n_devices, n_clusters, n_devices))
-    transition_matrices = transition_matrices / np.sum(transition_matrices, axis=2, keepdims=True)
+    transition_matrices = _tms_from_flat_unnormalized(result.x, n_devices, n_clusters)
+        
+    return transition_matrices
+
+
+def _tms_from_flat_unnormalized(x, n_devices, n_clusters):
+    transition_matrices = x.reshape((n_devices, n_clusters, n_devices))
+    sums = np.sum(transition_matrices, axis=2, keepdims=True)
+    mask = sums == 0
+    transition_matrices = np.where(mask, 0, transition_matrices / np.where(mask, 1, sums))
     return transition_matrices
 
     

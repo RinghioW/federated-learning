@@ -15,7 +15,7 @@ class AdaptiveNet(nn.Module):
             raise ValueError("Cannot quantize a pruned network.")
 
         if low_rank:
-            # TODO: Figure out what to do here
+            # TODO: Use torch.svd to reduce rank of the matrices
             pass
         self.conv1 = nn.Conv2d(3, 6, 5)
         self.batchnorm = nn.BatchNorm2d(6)

@@ -1,7 +1,8 @@
 import torch
-from config import DEVICE
 import torchvision
 from statistics import fmean
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Server():
     def __init__(self, dataset, model, users):
         self.model = model

@@ -6,14 +6,17 @@ results_dir = f"results/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 os.makedirs(results_dir)
 ctr = 0
 
-def plot_optimization(obj_function_history):
+def plot_optimization(obj_function_history, latency_history, data_imbalance_history, scaling_factor):
     global ctr
 
-    plt.title("Objective Function")
+    plt.title(f"Optimization (scaling factor: {scaling_factor})")
     plt.xlabel("Iteration")
     plt.ylabel("Objective Function")
-    plt.plot(obj_function_history)
-    plt.savefig(f"{results_dir}/objective_function_{ctr}.png")
+    plt.plot(obj_function_history, label="Objective Function")
+    plt.plot(latency_history, label="System Latency")
+    plt.plot(data_imbalance_history, label="Data Imbalance")
+    plt.legend()
+    plt.savefig(f"{results_dir}/opt_{ctr}.png")
     plt.close()
     ctr += 1
 
