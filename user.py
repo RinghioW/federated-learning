@@ -57,6 +57,8 @@ class User():
 
         # Devices adapt the user model according to their capabilities
         state_dict = torch.load("checkpoints/server.pt")["model_state_dict"]
+
+
         # State dict is reduced for adapting the layers
 
         for device in self.devices:
@@ -71,7 +73,7 @@ class User():
             else:
                 params = {"quantize": False, "pruning_factor": 0.1}
             
-            device.adapt(model, params)
+            device.adapt(model, state_dict, params)
     
     # Train the user model using knowledge distillation
     def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):

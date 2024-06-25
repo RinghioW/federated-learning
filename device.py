@@ -2,7 +2,36 @@ import torch
 import numpy as np
 import math
 import torchvision.transforms as transforms
+
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+# TODO: Add specifications for Jetson Nano
+# https://developer.nvidia.com/embedded/jetson-modules
+# https://www.raspberrypi.com/products/raspberry-pi-4-model-b/specifications/
+JETSON_NANO_CONFIG = {
+    'name' : 'Jetson Nano',
+    'compute' : 472, # GFLOPS
+    'memory': 4, # GB
+    'energy_budget': 10, # W
+}
+
+JETSON_XAVIER_NX_8GB_CONFIG = {
+    'name' : 'Jetson Xavier NX 8GB',
+    'compute' : 21, # TOPS
+    'memory': 8, # GB
+    'energy_budget': 20, # W
+}
+
+RASPBERRY_PI_4_CONFIG = {
+    'name' : 'Raspberry Pi 4 Model B',
+    'compute' : 9.69, # GFLOPS
+    'memory': 4, # GB
+    'energy_budget': 7, # W
+}
+
+
 
 class Device():
     def __init__(self, id, dataset=None, valset=None) -> None:
@@ -14,7 +43,6 @@ class Device():
 
         self.model = None # Model class (NOT instance)
         self.model_params = None
-        self.has_checkpoint = False
 
         self.clusters = None # Clustered labels
 
@@ -34,12 +62,8 @@ class Device():
         net = self.model(**self.model_params)
         optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
 
-        if self.has_checkpoint:
-            checkpoint = torch.load(f"checkpoints/device_{self.config['id']}.pt")
-            net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        else:
-            self.has_checkpoint = True
+        checkpoint = torch.load(f"checkpoints/device_{self.config['id']}.pt")
+        net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
         
         net.train()
 
@@ -72,7 +96,6 @@ class Device():
         # Save the model
         torch.save({
             'model_state_dict': net.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict()
         }, f"checkpoints/device_{self.config['id']}.pt")
 
     
@@ -94,8 +117,10 @@ class Device():
     # TODO : Implement this function on-the-fly
     def adapt(self, model, state_dict, params):
         
-        
         self.model = model
+        torch.save({
+            'model_state_dict': state_dict,
+        }, f"checkpoints/device_{self.config['id']}.pt")
         self.model_params = params
 
     def validate(self):
@@ -128,6 +153,7 @@ class Device():
     # And devices will not share data with each other
     @staticmethod
     def generate_config(id):
+        # TODO : Don't generate randomly but use the specs of actual devices
         return {"id" : id,
                 "compute" : 1. + np.random.rand(), # Compute capability in FLOPS
                 "memory" : 1. + np.random.rand(), # Memory capability in Bytes

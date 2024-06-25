@@ -4,9 +4,9 @@ from datetime import timedelta
 from device import Device
 from user import User
 from server import Server
-from adaptivenet import AdaptiveNet
-import plots
 import os
+import nets
+import plots
 def main():
     
     # Define arguments
@@ -35,7 +35,7 @@ def main():
 
     devices_per_user = num_devices // num_users
     users = [User(id=i, devices=[Device(j+(devices_per_user*i), trainsets.pop(), valsets.pop()) for j in range(devices_per_user)], testset=testset) for i in range(num_users)]
-    model = AdaptiveNet
+    model = nets.Cifar10CNN
     server = Server(dataset, model, users)
 
     time_start = time()
