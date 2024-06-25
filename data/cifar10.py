@@ -1,9 +1,19 @@
 from flwr_datasets import FederatedDataset
-BATCH_SIZE = 32
+from flwr_datasets.partitioner import DirichletPartitioner
 
 def load_datasets(num_clients):
-    fds = FederatedDataset(dataset="cifar10", partitioners={"train": num_clients})
-
+    fds = FederatedDataset(
+        dataset="cifar10",
+        partitioners={
+            "train": DirichletPartitioner(
+                num_partitions=num_clients,
+                partition_by="label",
+                alpha=0.3,
+                seed=42,
+                min_partition_size=0,
+            ),
+        },
+    )
     # Create train/val for each partition and wrap it into DataLoader
     trainsets = []
     valsets = []
