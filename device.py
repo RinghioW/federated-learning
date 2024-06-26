@@ -75,7 +75,7 @@ class Device():
         criterion = torch.nn.CrossEntropyLoss()
 
         for _ in range(epochs):
-            correct, total, epoch_loss = 0, 0, 0.0
+            correct, total, epoch_loss, epoch_acc = 0, 0, 0.0, 0.0
             for batch in trainloader:
                 images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
                 optimizer.zero_grad()
