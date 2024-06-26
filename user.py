@@ -64,14 +64,14 @@ class User():
         for device in self.devices:
             resources = device.resources()
 
-            if resources < 30:
-                params = {"quantize": True, "pruning_factor": 0.}
-            elif resources < 40:
-                params = {"quantize": False, "pruning_factor": 0.5}
-            elif resources < 50:
-                params = {"quantize": False, "pruning_factor": 0.3}
+            if resources < 6:
+                params = {"quantize": True, "pruning_factor": 0., "low_rank": False}
+            elif resources < 7:
+                params = {"quantize": False, "pruning_factor": 0.5, "low_rank": False}
+            elif resources < 8:
+                params = {"quantize": False, "pruning_factor": 0., "low_rank": True}
             else:
-                params = {"quantize": False, "pruning_factor": 0.1}
+                params = {"quantize": False, "pruning_factor": 0., "low_rank": False}
             
             device.adapt(model, state_dict, params)
     
@@ -89,8 +89,11 @@ class User():
         teachers = [] 
         for device in self.devices:
             teacher = device.model()
-            checkpoint = torch.load(f"checkpoints/device_{device.config['id']}.pt")
-            teacher.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
+            state_dict = torch.load(f"checkpoints/device_{device.config['id']}.pt")["model_state_dict"]
+            quantize = device.model_params["quantize"]
+            pruning_factor = device.model_params["pruning_factor"]
+            low_rank = device.model_params["low_rank"]
+            teacher.adapt(state_dict, quantize, pruning_factor, low_rank, eval=True)
             teacher.eval()
             teachers.append(teacher)
         

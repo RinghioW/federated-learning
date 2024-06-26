@@ -26,6 +26,8 @@ def shuffle_data(datasets, clusters, distributions, transition_matrices):
 
 # Extract an amount of samples of the target cluster from the dataset
 def _extract(dataset, cluster_labels, target_cluster, n_samples):
+    if n_samples == 0:
+        return dataset, cluster_labels, []
     dataset = list(dataset)
     idx_matches = []
     matches = []
@@ -42,6 +44,8 @@ def _extract(dataset, cluster_labels, target_cluster, n_samples):
 
 # Insert samples of cluster label into the dataset
 def _insert(dataset, cluster_labels, samples, target_label):
+    if len(samples) == 0:
+        return dataset, cluster_labels
     dataset = list(dataset)
     for sample in samples:
         dataset.append(sample)

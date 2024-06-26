@@ -4,8 +4,7 @@ from plots import plot_optimization
 from scipy.spatial.distance import jensenshannon
 from typing import List
 # It's needed to compute data imbalance and optimize the data shuffling
-
-DI_SCALING = 10e6
+DI_SCALING = 10e4
 # Function for optimizing equation 7 from ShuffleFL
 def optimize_transmission_matrices(adaptive_scaling_factor: float,
                                    cluster_distributions: List[int],
@@ -30,9 +29,9 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
         latencies = np.array(_latencies(uplinks, downlinks, computes, transition_matrices, cluster_distributions, cluster_distributions_post_shuffle))
 
 
-        data_imbalance = np.mean(data_imbalances)
+        data_imbalance = np.mean(data_imbalances) * DI_SCALING
         system_latency = np.amax(latencies)
-        obj_func = system_latency + (DI_SCALING * data_imbalance)
+        obj_func = system_latency + data_imbalance
         objective_function_history.append(obj_func)
         latency_history.append(system_latency)
         data_imbalance_history.append(data_imbalance)
@@ -43,7 +42,7 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
                         x0=np.random.rand(n_devices, n_clusters, n_devices).flatten(),
                         method='SLSQP',
                         bounds=[(0.,1.)] * (n_devices * n_clusters * n_devices),
-                        options={'maxiter': 50})
+                        )
     if not result.success:
         print(f"WARNING: Optimization did not converge: {result.message} with status {result.status}")
     

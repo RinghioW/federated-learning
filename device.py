@@ -60,11 +60,14 @@ class Device():
             return
 
         # Load the model
-        net = self.model(**self.model_params)
+        net = self.model()
+        state_dict = torch.load(f"checkpoints/device_{self.config['id']}.pt")['model_state_dict']
+        quantize = self.model_params["quantize"]
+        pruning_factor = self.model_params["pruning_factor"]
+        low_rank = self.model_params["low_rank"]
+        net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank, eval=False)
         optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
 
-        checkpoint = torch.load(f"checkpoints/device_{self.config['id']}.pt")
-        net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
         
         net.train()
 
@@ -117,7 +120,6 @@ class Device():
 
     # TODO : Implement this function on-the-fly
     def adapt(self, model, state_dict, params):
-        
         self.model = model
         torch.save({
             'model_state_dict': state_dict,
@@ -127,9 +129,12 @@ class Device():
     def validate(self):
         if self.valset is None:
             return 0
-        net = self.model(**self.model_params)
-        checkpoint = torch.load(f"checkpoints/device_{self.config['id']}.pt")
-        net.load_state_dict(checkpoint['model_state_dict'], strict=False, assign=True)
+        net = self.model()
+        state_dict = torch.load(f"checkpoints/device_{self.config['id']}.pt")['model_state_dict']
+        quantize = self.model_params["quantize"]
+        pruning_factor = self.model_params["pruning_factor"]
+        low_rank = self.model_params["low_rank"]
+        net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank, eval=True)
         net.eval()
         to_tensor = transforms.ToTensor()
         dataset = self.valset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
