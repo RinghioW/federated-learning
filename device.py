@@ -31,6 +31,7 @@ RASPBERRY_PI_4_CONFIG = {
     'energy_budget': 7, # W
 }
 
+NUM_CLASSES = 10
 
 
 class Device():
@@ -112,7 +113,7 @@ class Device():
         self.clusters = kmeans_estimator.predict(feature_space).tolist()
     
     def cluster_distribution(self):
-        return np.bincount(self.clusters).tolist()
+        return np.bincount(self.clusters, minlength=NUM_CLASSES)
 
     # TODO : Implement this function on-the-fly
     def adapt(self, model, state_dict, params):
