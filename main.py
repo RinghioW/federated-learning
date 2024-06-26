@@ -25,7 +25,11 @@ def main():
     num_devices = args.devices
     dataset = args.dataset
     server_epochs = args.epochs
-
+    shuffle = args.shuffle
+    adapt = args.adapt
+    
+    os.makedirs("checkpoints", exist_ok=True)
+    os.makedirs("results", exist_ok=True)
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
         from data.cifar10 import load_datasets
@@ -35,6 +39,12 @@ def main():
 
     devices_per_user = num_devices // num_users
     users = [User(id=i, devices=[Device(j+(devices_per_user*i), trainsets.pop(), valsets.pop()) for j in range(devices_per_user)], testset=testset) for i in range(num_users)]
+    
+    # Print devices configuration
+    for user in users:
+        for device in user.devices:
+            print(device)
+
     model = nets.Cifar10CNN
     server = Server(dataset, model, users)
 
@@ -46,7 +56,7 @@ def main():
     initial_loss, initial_accuracy = server.test(testset)
     losses.append(initial_loss)
     accuracies.append(initial_accuracy)
-    os.makedirs("checkpoints", exist_ok=True)
+    
 
     print(f"S, e0 - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}")
     # Perform federated learning for the server model
