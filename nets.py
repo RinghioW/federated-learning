@@ -80,10 +80,11 @@ class AdaptiveCifar10CNN(nn.Module):
     def apply_quantization(self):
         quanto.quantize(self, weights=quanto.qint8)
     
-    def apply_pruning(self):
+    def apply_pruning(self, pruning_factor):
+        # TODO: Weights should be the same as when the network was first initialized on the device for pruning to be consistent
         for _, layer in self.named_modules():
             if isinstance(layer, (nn.Conv2d, nn.Linear)):
-                self.prune(layer, self.pruning_factor)
+                self.prune(layer, pruning_factor)
     
     def prune(self, layer, pruning_factor):
         prune.ln_structured(module=layer, name="weight", amount=pruning_factor, n=2, dim=0)
@@ -122,7 +123,7 @@ class AdaptiveCifar10CNN(nn.Module):
             self.load_state_dict(state_dict)
 
         if pruning_factor > 0.:
-            self.apply_pruning()
+            self.apply_pruning(pruning_factor)
         elif quantize:
             self.apply_quantization()
         elif low_rank:
