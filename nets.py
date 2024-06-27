@@ -87,12 +87,12 @@ class AdaptiveCifar10CNN(nn.Module):
                 prune.ln_structured(module=layer, name="weight", amount=pruning_factor, n=2, dim=0)
                 prune.remove(layer, name="weight")
     
-    def _low_rank(self):
+    def _low_rank(self, rank=10):
         for _, layer in self.named_modules():
             if isinstance(layer, (nn.Conv2d, nn.Linear)):
-                self._svd(layer, self.svd_rank)
+                self._svd(layer, rank)
 
-    def _svd(layer, rank):
+    def _svd(self, layer, rank):
         with torch.no_grad():
             W = layer.weight
             U, S, V = torch.svd(W.flatten(1))  # SVD on 2D tensor
