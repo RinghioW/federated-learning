@@ -111,6 +111,9 @@ class Device():
         return reduced_dataset
 
     def cluster(self, lda_estimator, kmeans_estimator):
+        if len(self.dataset) == 0:
+            self.clusters = []
+            return
         dataset = np.array(self.dataset["img"]).reshape(len(self.dataset), -1)
         feature_space = lda_estimator.transform(dataset)
         self.clusters = kmeans_estimator.predict(feature_space).tolist()

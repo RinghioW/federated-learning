@@ -93,7 +93,7 @@ class User():
             quantize = device.model_params["quantize"]
             pruning_factor = device.model_params["pruning_factor"]
             low_rank = device.model_params["low_rank"]
-            teacher.adapt(state_dict, quantize, pruning_factor, low_rank, eval=True)
+            teacher.adapt(state_dict, pruning_factor, quantize, low_rank, eval=True)
             teacher.eval()
             teachers.append(teacher)
         
@@ -101,7 +101,7 @@ class User():
         train_loader = torch.utils.data.DataLoader(self.kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, drop_last=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
         
-        for epoch in range(epochs):
+        for _ in range(epochs):
 
             running_loss = 0.0
             running_kd_loss = 0.0

@@ -77,28 +77,22 @@ class AdaptiveCifar10CNN(nn.Module):
         self.fc1 = nn.Linear(128 * 4 * 4, 128)
         self.fc2 = nn.Linear(128, 10)
 
-    def apply_quantization(self):
+    def _quantize(self):
         quanto.quantize(self, weights=quanto.qint8)
     
-    def apply_pruning(self, pruning_factor):
+    def _prune(self, pruning_factor):
         # TODO: Weights should be the same as when the network was first initialized on the device for pruning to be consistent
         for _, layer in self.named_modules():
             if isinstance(layer, (nn.Conv2d, nn.Linear)):
-                self.prune(layer, pruning_factor)
+                prune.ln_structured(module=layer, name="weight", amount=pruning_factor, n=2, dim=0)
+                prune.remove(layer, name="weight")
     
-    def prune(self, layer, pruning_factor):
-        prune.ln_structured(module=layer, name="weight", amount=pruning_factor, n=2, dim=0)
-        prune.remove(layer, name="weight")
-        return layer
-    def apply_svd_compression(self):
+    def _low_rank(self):
         for _, layer in self.named_modules():
             if isinstance(layer, (nn.Conv2d, nn.Linear)):
-                self.svd_compression(layer, self.svd_rank)
+                self._svd(layer, self.svd_rank)
 
-    def _svd_compression(layer, rank):
-        if not isinstance(layer, (nn.Conv2d, nn.Linear)):
-            return layer
-        
+    def _svd(layer, rank):
         with torch.no_grad():
             W = layer.weight
             U, S, V = torch.svd(W.flatten(1))  # SVD on 2D tensor
@@ -123,11 +117,11 @@ class AdaptiveCifar10CNN(nn.Module):
             self.load_state_dict(state_dict)
 
         if pruning_factor > 0.:
-            self.apply_pruning(pruning_factor)
+            self._prune(pruning_factor)
         elif quantize:
-            self.apply_quantization()
+            self._quantize()
         elif low_rank:
-            self.apply_svd_compression()
+            self._low_rank()
 
         if eval:
             self.load_state_dict(state_dict)
