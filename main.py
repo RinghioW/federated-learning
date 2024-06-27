@@ -4,6 +4,7 @@ from datetime import timedelta
 from device import Device
 from user import User
 from server import Server
+from log import Logger
 import os
 import nets
 import plots
@@ -16,14 +17,13 @@ def main():
     parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices")
     parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs")
-    parser.add_argument("-c", "--compare", dest="compare", type=bool, default=False, help="Compare with centralized learning")
+
     # Parse arguments
     args = parser.parse_args()
     num_users = args.users
     num_devices = args.devices
     dataset = args.dataset
     server_epochs = args.epochs
-    compare = args.compare
 
     os.makedirs("checkpoints", exist_ok=True)
     os.makedirs("results", exist_ok=True)
@@ -45,6 +45,8 @@ def main():
     model = nets.AdaptiveCifar10CNN
     server = Server(dataset, model, users)
 
+    # Log
+    logger = Logger()
     time_start = time()
 
     # Evaluate the server model before training
