@@ -64,15 +64,15 @@ class User():
         for device in self.devices:
             resources = device.resources()
 
-            # if resources < 6:
-            #     params = {"quantize": True, "pruning_factor": 0., "low_rank": False}
-            # elif resources < 7:
-            #     params = {"quantize": False, "pruning_factor": 0.5, "low_rank": False}
-            # elif resources < 8:
-            #     params = {"quantize": False, "pruning_factor": 0., "low_rank": True}
-            # else:
-            #     params = {"quantize": False, "pruning_factor": 0., "low_rank": False}
-            params = {"quantize": False, "pruning_factor": 0., "low_rank": True}
+            if resources < 6:
+                params = {"quantize": True, "pruning_factor": 0., "low_rank": False}
+            elif resources < 7:
+                params = {"quantize": False, "pruning_factor": 0.5, "low_rank": False}
+            elif resources < 8:
+                params = {"quantize": False, "pruning_factor": 0., "low_rank": True}
+            else:
+                params = {"quantize": False, "pruning_factor": 0., "low_rank": False}
+                
             device.adapt(model, state_dict, params)
     
     # Train the user model using knowledge distillation
