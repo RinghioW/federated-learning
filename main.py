@@ -24,9 +24,12 @@ def main():
     num_devices = args.devices
     dataset = args.dataset
     server_epochs = args.epochs
-
-    os.makedirs("checkpoints", exist_ok=True)
+    # Log
     os.makedirs("results", exist_ok=True)
+    os.makedirs("checkpoints", exist_ok=True)
+    logger = Logger(log_dir="results")
+    time_start = time()
+
     # Load dataset and split it according to the number of devices
     if dataset == "cifar10":
         from data.cifar10 import load_datasets
@@ -35,7 +38,10 @@ def main():
         raise ValueError(f"Dataset {dataset} not implemented")
 
     devices_per_user = num_devices // num_users
-    users = [User(id=i, devices=[Device(j+(devices_per_user*i), trainsets.pop(), valsets.pop()) for j in range(devices_per_user)], testset=testset) for i in range(num_users)]
+    users = [User(id=i, 
+                  devices=[Device(j+(devices_per_user*i), logger, trainsets.pop(), valsets.pop()) for j in range(devices_per_user)],
+                  testset=testset,
+                  logger=logger) for i in range(num_users)]
     
     # Print devices configuration
     for user in users:
@@ -43,11 +49,8 @@ def main():
             print(device)
 
     model = nets.AdaptiveCifar10CNN
-    server = Server(dataset, model, users)
+    server = Server(dataset, model, users, logger)
 
-    # Log
-    logger = Logger()
-    time_start = time()
 
     # Evaluate the server model before training
     losses = []

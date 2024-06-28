@@ -4,7 +4,7 @@ from statistics import fmean
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Server():
-    def __init__(self, dataset, model, users):
+    def __init__(self, dataset, model, users, logger):
         self.model = model
         torch.save({'model_state_dict': model().state_dict()}, "checkpoints/server.pt")
         self.dataset = dataset
@@ -12,6 +12,7 @@ class Server():
         self.wall_clock_training_times = None
         self.scaling_factor = 0.5
         self.init = False
+        self.logger = logger
 
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient

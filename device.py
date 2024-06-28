@@ -35,7 +35,7 @@ NUM_CLASSES = 10
 
 
 class Device():
-    def __init__(self, id, dataset=None, valset=None) -> None:
+    def __init__(self, id, logger, dataset=None, valset=None) -> None:
         self.id = id
         self.config = Device.generate_config(id)
 

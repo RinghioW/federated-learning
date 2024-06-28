@@ -13,7 +13,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 10
 
 class User():
-    def __init__(self, id, devices, testset, n_classes=NUM_CLASSES) -> None:
+    def __init__(self, id, devices, testset, logger, n_classes=NUM_CLASSES) -> None:
         self.id = id
         self.devices = devices
         self.kd_dataset: datasets.Dataset = None
@@ -43,6 +43,8 @@ class User():
         self.training_losses = []
         self.training_accuracies = []
         self.test_accuracies = []
+
+        self.logger = logger
 
 
     def __repr__(self) -> str:
