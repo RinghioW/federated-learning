@@ -51,6 +51,8 @@ class Server():
                 correct += (predicted == labels).sum().item()
         loss /= len(testloader.dataset)
         accuracy = correct / total
+
+        self.logger.s_log_test(accuracy, loss)
         return loss, accuracy
     
     # Equation 10 in ShuffleFL
@@ -90,15 +92,21 @@ class Server():
         # Choose the users for the next round of training
         self._select_users()
 
+        # Log new epoch
+        self.logger.new_epoch(len(self.users))
+
         # Send the adaptive scaling factor to the users
         if self.init:
             self._send_adaptive_scaling_factor()
 
         # Wait for users to send their model
-        self._poll_users(kd_epochs=10, on_device_epochs=10)
+        # TODO: Should return training times
+        _ = self._poll_users(kd_epochs=10, on_device_epochs=10)
 
         # Aggregate the updates from the users
         self._aggregate_updates()
+
+        self.logger.s_log_latency(self.wall_clock_training_times)
 
         if not self.init:
             self.init = True

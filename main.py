@@ -7,7 +7,6 @@ from server import Server
 from log import Logger
 import os
 import nets
-import plots
 def main():
     
     # Define arguments
@@ -39,9 +38,9 @@ def main():
 
     devices_per_user = num_devices // num_users
     users = [User(id=i, 
-                  devices=[Device(j+(devices_per_user*i), logger, trainsets.pop(), valsets.pop()) for j in range(devices_per_user)],
-                  testset=testset,
-                  logger=logger) for i in range(num_users)]
+                  devices=[Device(j+(devices_per_user*i), trainsets.pop(), valsets.pop()) for j in range(devices_per_user)],
+                  logger=logger,
+                  testset=testset) for i in range(num_users)]
     
     # Print devices configuration
     for user in users:
@@ -51,16 +50,10 @@ def main():
     model = nets.AdaptiveCifar10CNN
     server = Server(dataset, model, users, logger)
 
-
     # Evaluate the server model before training
-    losses = []
-    accuracies = []
     initial_loss, initial_accuracy = server.test(testset)
-    losses.append(initial_loss)
-    accuracies.append(initial_accuracy)
-    
 
-    print(f"S, e0 - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}")
+    print(f"S, init - Loss: {initial_loss: .4f}, Accuracy: {initial_accuracy: .3f}")
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
     # ShuffleFL step 1, 2
@@ -73,17 +66,12 @@ def main():
         # Server evaluates the model
         loss, accuracy = server.test(testset)
 
-        losses.append(loss)
-        accuracies.append(accuracy)
 
-        print(f"S, e{epoch+1} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
+        print(f"S, e{epoch} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
 
+    logger.dump()
     print(f"Elapsed Time: {str(timedelta(seconds=time() - time_start))}")
-    # Plot the results
-    plots.plot_devices(users)
-    plots.plot_users(users)
 
-    plots.plot_server(losses, accuracies)
 
 if __name__ == "__main__":
     main()

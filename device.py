@@ -35,7 +35,7 @@ NUM_CLASSES = 10
 
 
 class Device():
-    def __init__(self, id, logger, dataset=None, valset=None) -> None:
+    def __init__(self, id, dataset=None, valset=None) -> None:
         self.id = id
         self.config = Device.generate_config(id)
 
@@ -175,3 +175,14 @@ class Device():
         self.dataset = trainset
         self.valset = valset
         self.config = config
+
+    # Ram
+    def memory_usage(self):
+        return len(self.dataset) / self.config["memory"]
+
+    def computation_time(self):
+        return self.config["compute"]*len(self.dataset)
+    
+    def energy_usage(self):
+        return len(self.dataset) / self.config["energy_budget"]
+    

@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.optimize import minimize
-from plots import plot_optimization
 from scipy.spatial.distance import jensenshannon
 from typing import List
 # It's needed to compute data imbalance and optimize the data shuffling
@@ -10,14 +9,12 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
                                    cluster_distributions: List[int],
                                    uplinks: List[float],
                                    downlinks: List[float],
-                                   computes: List[float]) -> np.ndarray:
+                                   computes: List[float],
+                                   logger,
+                                   id) -> np.ndarray:
 
     n_devices = len(cluster_distributions)
     n_clusters = len(cluster_distributions[0])
-
-    objective_function_history: List[float] = []
-    latency_history: List[float] = []
-    data_imbalance_history: List[float] = []
 
     def objective(x: np.ndarray) -> float:
         transition_matrices = _tms_from_flat_unnormalized(x, n_devices, n_clusters)
@@ -32,9 +29,8 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
         data_imbalance = np.mean(data_imbalances) * DI_SCALING
         system_latency = np.amax(latencies)
         obj_func = system_latency + data_imbalance
-        objective_function_history.append(obj_func)
-        latency_history.append(system_latency)
-        data_imbalance_history.append(data_imbalance)
+        logger.u_log_optimization(id, obj_func, system_latency, data_imbalance)
+
         return obj_func
 
     
@@ -46,7 +42,6 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
     if not result.success:
         print(f"WARNING: Optimization did not converge: {result.message} with status {result.status}")
     
-    plot_optimization(objective_function_history, latency_history, data_imbalance_history, adaptive_scaling_factor)
 
     transition_matrices = _tms_from_flat_unnormalized(result.x, n_devices, n_clusters)
         

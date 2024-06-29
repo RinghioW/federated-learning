@@ -103,12 +103,12 @@ class User():
         train_loader = torch.utils.data.DataLoader(self.kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, drop_last=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
         
+        running_loss = 0.0
+        running_kd_loss = 0.0
+        running_ce_loss = 0.0
+        running_accuracy = 0.0
         for _ in range(epochs):
 
-            running_loss = 0.0
-            running_kd_loss = 0.0
-            running_ce_loss = 0.0
-            running_accuracy = 0.0
             for batch in train_loader:
                 inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
 
@@ -145,8 +145,7 @@ class User():
                 running_kd_loss += soft_targets_loss.item()
                 running_ce_loss += label_loss.item()
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
-            self.training_losses.append(running_loss / len(train_loader.dataset))
-            self.training_accuracies.append(running_accuracy / len(train_loader.dataset))
+        self.logger.u_log_train(self.id, running_kd_loss / len(train_loader.dataset), running_ce_loss / len(train_loader.dataset), running_accuracy / len(train_loader.dataset))
         
         # Save the model for checkpointing
         torch.save({'model_state_dict': student.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, f"checkpoints/user_{self.id}.pt")
@@ -154,6 +153,9 @@ class User():
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
     def train(self, kd_epochs, on_device_epochs):
+        # Log device configs
+        self.logger.u_log_configs(self.id,[d.config for d in self.devices])
+
         # Adapt the model
         self._adapt_model(self.model)
 
@@ -165,6 +167,9 @@ class User():
             device.train(on_device_epochs)
             print(f"Device {device.config['id']} validation accuracy: {device.validate():.3f}")
         
+        self.logger.u_log_latency(self.id, [device.computation_time() for device in self.devices])
+        self.logger.u_log_energy(self.id, [device.energy_usage() for device in self.devices])
+        self.logger.u_log_memory(self.id, [device.memory_usage() for device in self.devices])
         # Create the knowledge distillation dataset
         self._create_kd_dataset()
 
@@ -190,7 +195,7 @@ class User():
         uplinks = [device.config["uplink_rate"] for device in self.devices]
         downlinks = [device.config["downlink_rate"] for device in self.devices]
         computes = [device.config["compute"] for device in self.devices]
-        transition_matrices = optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes)
+        transition_matrices = optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes, self.logger, self.id)
 
         # Shuffle the data and update the transition matrices
         # Implements Equation 1 from ShuffleFL
@@ -198,11 +203,15 @@ class User():
         clusters = [device.clusters for device in self.devices]
         res_datasets, n_transferred_samples = shuffle_data(datasets, clusters, cluster_distributions, transition_matrices)
 
+        # TODO: log
+
         # Update average capability
         # Update the devices with the new datasets
         for device, dataset in zip(self.devices, res_datasets):
             device.dataset = dataset
         
+        # TODO: log
+
         return n_transferred_samples
 
     # Compute the difference in capability of the user compared to last round
@@ -277,5 +286,5 @@ class User():
                 outputs = net(images)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
-        self.test_accuracies.append(correct / total)
+        self.logger.u_log_test(self.id, correct / total)
         return correct / total
