@@ -120,7 +120,7 @@ class Server():
         self._poll_users_no_adaptation_no_shuffle(on_device_epochs=10)
 
         # Aggregate the updates from the users
-        self._aggregate_updates()
+        self._aggregate_updates_no_adaptation_no_shuffle()
 
         self.logger.s_log_latency(self.wall_clock_training_times)
 
@@ -135,3 +135,12 @@ class Server():
             user.train_no_adaptation_no_shuffle(on_device_epochs)
             self.wall_clock_training_times[user_id] = time.time() - initial_time
             user.logger.u_log_test(user_id, user.validate())
+
+    def _aggregate_updates_no_adaptation_no_shuffle(self):
+        # Load the first user model
+        state_dicts = [torch.load(f"checkpoints/user_{i}.pt")['model_state_dict'] for i in range(len(self.users))]
+        avg_state_dict = {}
+        for key in state_dicts[0].keys():
+            avg_state_dict[key] = sum([state_dict[key] for state_dict in state_dicts]) / len(self.users)
+        # Save the aggregated weights
+        torch.save({'model_state_dict': avg_state_dict}, "checkpoints/server.pt")
