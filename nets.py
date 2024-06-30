@@ -112,9 +112,8 @@ class AdaptiveCifar10CNN(nn.Module):
 
         return layer
     
-    def adapt(self, state_dict, pruning_factor=0., quantize=False, low_rank=False, eval=False):
-        if not eval:
-            self.load_state_dict(state_dict)
+    def adapt(self, state_dict, pruning_factor=0., quantize=False, low_rank=False):
+        self.load_state_dict(state_dict)
 
         if pruning_factor > 0.:
             self._prune(pruning_factor)
@@ -123,8 +122,6 @@ class AdaptiveCifar10CNN(nn.Module):
         elif low_rank:
             self._low_rank()
 
-        if eval:
-            self.load_state_dict(state_dict)
 
 
     def forward(self, x):

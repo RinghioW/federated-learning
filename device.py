@@ -51,6 +51,8 @@ class Device():
         self.training_accuracies = []
         self.validation_accuracies = []
 
+        self.instantiated_model = None
+
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
     
@@ -60,16 +62,11 @@ class Device():
             return
 
         # Load the model
-        net = self.model()
-        state_dict = torch.load(f"checkpoints/device_{self.config['id']}.pt")['model_state_dict']
-        quantize = self.model_params["quantize"]
-        pruning_factor = self.model_params["pruning_factor"]
-        low_rank = self.model_params["low_rank"]
-        net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank, eval=False)
+        net = self.instantiated_model
+        net.train()
+
         optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
 
-        
-        net.train()
 
         to_tensor = transforms.ToTensor()
         dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
@@ -97,11 +94,6 @@ class Device():
             self.training_losses.append(epoch_loss)
             self.training_accuracies.append(epoch_acc)
 
-        # Save the model
-        torch.save({
-            'model_state_dict': net.state_dict(),
-        }, f"checkpoints/device_{self.config['id']}.pt")
-
     
     # Function to sample a sub-dataset from the dataset
     # TODO: Implement uplink in a sensible way
@@ -121,23 +113,18 @@ class Device():
     def cluster_distribution(self):
         return np.bincount(self.clusters, minlength=NUM_CLASSES)
 
-    # TODO : Implement this function on-the-fly
     def adapt(self, model, state_dict, params):
-        self.model = model
-        torch.save({
-            'model_state_dict': state_dict,
-        }, f"checkpoints/device_{self.config['id']}.pt")
-        self.model_params = params
+        net = model()
+        quantize = params["quantize"]
+        pruning_factor = params["pruning_factor"]
+        low_rank = params["low_rank"]
+        net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank)
+        self.instantiated_model = net
 
     def validate(self):
         if self.valset is None:
-            return 0
-        net = self.model()
-        state_dict = torch.load(f"checkpoints/device_{self.config['id']}.pt")['model_state_dict']
-        quantize = self.model_params["quantize"]
-        pruning_factor = self.model_params["pruning_factor"]
-        low_rank = self.model_params["low_rank"]
-        net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank, eval=True)
+            return 0.
+        net = self.instantiated_model
         net.eval()
         to_tensor = transforms.ToTensor()
         dataset = self.valset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")

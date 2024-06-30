@@ -90,12 +90,7 @@ class User():
         # option 2 -> average the teacher logits from all devices
         teachers = [] 
         for device in self.devices:
-            teacher = device.model()
-            state_dict = torch.load(f"checkpoints/device_{device.config['id']}.pt")["model_state_dict"]
-            quantize = device.model_params["quantize"]
-            pruning_factor = device.model_params["pruning_factor"]
-            low_rank = device.model_params["low_rank"]
-            teacher.adapt(state_dict, pruning_factor, quantize, low_rank, eval=True)
+            teacher = device.instantiated_model
             teacher.eval()
             teachers.append(teacher)
         
