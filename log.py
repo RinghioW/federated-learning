@@ -2,6 +2,16 @@ import os
 import json
 
 class Logger:
+    # TODO: figure out a way 
+    # to log the same run but with different metrics such 
+    # as the run without shuffle and a run without adaptation
+    # but the problem is that the time taken for all these separate runs is going to be too much
+    # So best is to keep the data in place, and have different datasets for each version
+    # So have a separate metric for the dataset without shuffle and the model without adaptation
+    # In that case, we will have the best of both worlds 
+    # Another alternative is to launch separate runs on different computes
+    # But the data will be different in that case, unless we manage to really get the seed right
+    # The federateddataset api does offer an option to set the seed so it should be doable
     # Epoch: id
     # |--- "Server"
     #     |--- Accuracy: float
@@ -82,3 +92,7 @@ class Logger:
         self.log[self.epoch]["users"][user_id]["optimization"]["objective"].append(objective)
         self.log[self.epoch]["users"][user_id]["optimization"]["latency"].append(latency)
         self.log[self.epoch]["users"][user_id]["optimization"]["data_imbalance"].append(data_imbalance)
+
+
+
+
