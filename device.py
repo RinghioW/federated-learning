@@ -2,12 +2,11 @@ import torch
 import numpy as np
 import math
 import torchvision.transforms as transforms
-
+from scipy.spatial.distance import jensenshannon
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# TODO: Add specifications for Jetson Nano
 # https://developer.nvidia.com/embedded/jetson-modules
 # https://www.raspberrypi.com/products/raspberry-pi-4-model-b/specifications/
 JETSON_NANO_CONFIG = {
@@ -47,10 +46,7 @@ class Device():
 
         self.clusters = None # Clustered labels
 
-        self.training_losses = []
-        self.training_accuracies = []
-        self.validation_accuracies = []
-
+        
         self.instantiated_model = None
 
     def __repr__(self) -> str:
@@ -75,7 +71,6 @@ class Device():
         criterion = torch.nn.CrossEntropyLoss()
 
         for _ in range(epochs):
-            correct, total, epoch_loss, epoch_acc = 0, 0, 0.0, 0.0
             for batch in trainloader:
                 images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
                 optimizer.zero_grad()
@@ -83,16 +78,7 @@ class Device():
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
-                # Metrics
-                epoch_loss += loss.item()
-                total += labels.size(0)
-                correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
-            if len(trainloader.dataset) != 0:
-                epoch_loss /= len(trainloader.dataset)
-            if total != 0:
-                epoch_acc = correct / total
-            self.training_losses.append(epoch_loss)
-            self.training_accuracies.append(epoch_acc)
+
 
     
     # Function to sample a sub-dataset from the dataset
@@ -136,13 +122,11 @@ class Device():
                 outputs = net(images)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
-        self.validation_accuracies.append(correct / total)
         return correct / total
 
     def resources(self):
-        return self.config["compute"] + self.config["memory"] + self.config["energy_budget"]
+        return self.memory_usage() + self.computation_time() + self.energy_usage()
 
-    # TODO: Characterize the devices in a way that makes sense
     # The higher these numbers are, the higher the latency factor will be
     # If the latency is really high, this means that SL >> DI,
     # Meaning that data imbalance will not be accounted for
@@ -172,4 +156,16 @@ class Device():
     
     def energy_usage(self):
         return len(self.dataset) / self.config["energy_budget"]
+    
+    def data_imbalance(self):
+        distribution = np.bincount(self.dataset["label"], minlength=10)
+        n_samples = sum(distribution)
+        if n_samples == 0:
+            return np.float64(0.)
+        n_classes = len(distribution)
+        avg_samples = n_samples / n_classes
+        balanced_distribution = [avg_samples] * n_classes
+        js = jensenshannon(balanced_distribution, distribution)
+        return js
+
     

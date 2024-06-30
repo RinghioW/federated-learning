@@ -2,6 +2,7 @@ from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import DirichletPartitioner
 
 def load_datasets(num_clients):
+    num_clients = num_clients
     fds = FederatedDataset(
         dataset="cifar10",
         partitioners={

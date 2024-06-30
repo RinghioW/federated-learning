@@ -13,7 +13,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_CLASSES = 10
 
 class User():
-    def __init__(self, id, devices, testset, logger, n_classes=NUM_CLASSES) -> None:
+    def __init__(self, id, devices, testset, n_classes=NUM_CLASSES) -> None:
         self.id = id
         self.devices = devices
         self.kd_dataset: datasets.Dataset = None
@@ -44,7 +44,7 @@ class User():
         self.training_accuracies = []
         self.test_accuracies = []
 
-        self.logger = logger
+        self.logger = None
 
 
     def __repr__(self) -> str:
@@ -54,23 +54,20 @@ class User():
     # Implements the adaptation step from ShuffleFL Novelty
     # Constructs a function s.t. device_model = f(user_model, device_resources, device_data_distribution)
     def _adapt_model(self, model):
-        # User gets the same model as the server
         self.model = model
 
-        # Devices adapt the user model according to their capabilities
         state_dict = torch.load("checkpoints/server.pt")["model_state_dict"]
 
+        resources = [device.resources() for device in self.devices]
+        avg_resources = fmean(resources)
+        std_resources = np.std(resources)
+        for device, resource in zip(self.devices, resources):
 
-        # State dict is reduced for adapting the layers
-
-        for device in self.devices:
-            resources = device.resources()
-
-            if resources < 6:
+            if resource < avg_resources - std_resources:
                 params = {"quantize": True, "pruning_factor": 0., "low_rank": False}
-            elif resources < 7:
+            elif resource < avg_resources:
                 params = {"quantize": False, "pruning_factor": 0.5, "low_rank": False}
-            elif resources < 8:
+            elif resource < avg_resources + std_resources:
                 params = {"quantize": False, "pruning_factor": 0., "low_rank": True}
             else:
                 params = {"quantize": False, "pruning_factor": 0., "low_rank": False}
@@ -160,11 +157,12 @@ class User():
         # Train the devices
         for device in self.devices:
             device.train(on_device_epochs)
-            print(f"Device {device.config['id']} validation accuracy: {device.validate():.3f}")
         
-        self.logger.u_log_latency(self.id, [device.computation_time() for device in self.devices])
-        self.logger.u_log_energy(self.id, [device.energy_usage() for device in self.devices])
-        self.logger.u_log_memory(self.id, [device.memory_usage() for device in self.devices])
+        self.logger.u_log_devices_test(self.id, [device.validate() for device in self.devices])
+        self.logger.u_log_latencies(self.id, [device.computation_time() for device in self.devices])
+        self.logger.u_log_energies(self.id, [device.energy_usage() for device in self.devices])
+        self.logger.u_log_memories(self.id, [device.memory_usage() for device in self.devices])
+        self.logger.u_log_data_imbalances(self.id, [device.data_imbalance() for device in self.devices])
         # Create the knowledge distillation dataset
         self._create_kd_dataset()
 
@@ -198,14 +196,11 @@ class User():
         clusters = [device.clusters for device in self.devices]
         res_datasets, n_transferred_samples = shuffle_data(datasets, clusters, cluster_distributions, transition_matrices)
 
-        # TODO: log
-
         # Update average capability
         # Update the devices with the new datasets
         for device, dataset in zip(self.devices, res_datasets):
             device.dataset = dataset
         
-        # TODO: log
 
         return n_transferred_samples
 
@@ -281,5 +276,28 @@ class User():
                 outputs = net(images)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
-        self.logger.u_log_test(self.id, correct / total)
         return correct / total
+
+    def train_no_adaptation_no_shuffle(self, on_device_epochs):
+        # Log device configs
+        self.logger.u_log_configs(self.id,[d.config for d in self.devices])
+
+        # Train the devices
+        for device in self.devices:
+            device.instantiated_model = self.model()
+            device.instantiated_model.load_state_dict(torch.load("checkpoints/server.pt")["model_state_dict"])
+            device.train(on_device_epochs)
+        
+        self.logger.u_log_devices_test(self.id, [device.validate() for device in self.devices])
+        self.logger.u_log_latencies(self.id, [device.computation_time() for device in self.devices])
+        self.logger.u_log_energies(self.id, [device.energy_usage() for device in self.devices])
+        self.logger.u_log_memories(self.id, [device.memory_usage() for device in self.devices])
+        self.logger.u_log_data_imbalances(self.id, [device.data_imbalance() for device in self.devices])
+
+        # Aggregate the updates
+        state_dicts = [d.instantiated_model.state_dict() for d in self.devices]
+        avg_state_dict = {}
+        for key in state_dicts[0].keys():
+            avg_state_dict[key] = sum([state_dict[key] for state_dict in state_dicts]) / len(state_dicts)
+        # Save the aggregated weights
+        torch.save({'model_state_dict': avg_state_dict}, f"checkpoints/user_{self.id}.pt")

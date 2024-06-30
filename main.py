@@ -1,54 +1,46 @@
 from argparse import ArgumentParser
-from time import time
-from datetime import timedelta
 from device import Device
 from user import User
 from server import Server
 from log import Logger
 import os
 import nets
+from data.cifar10 import load_datasets
 def main():
     
     # Define arguments
     parser = ArgumentParser(description="Heterogeneous federated learning framework using pytorch")
 
     parser.add_argument("-u", "--users", dest="users", type=int, default=3, help="Total number of users")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=12, help="Total number of devices")
-    parser.add_argument("-s", "--dataset", dest="dataset", type=str, default="cifar10", help="Dataset to use")
+    parser.add_argument("-d", "--devices", dest="devices", type=int, default=9, help="Total number of devices")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs")
-
+    parser.add_argument("-n", "--no-adaptation", dest="no_adaptation", action="store_true", help="Run without adaptation and shuffling")
     # Parse arguments
     args = parser.parse_args()
     num_users = args.users
     num_devices = args.devices
-    dataset = args.dataset
     server_epochs = args.epochs
+    no_adaptation = args.no_adaptation
+
     # Log
     os.makedirs("results", exist_ok=True)
     os.makedirs("checkpoints", exist_ok=True)
-    logger = Logger(log_dir="results")
-    time_start = time()
+    if no_adaptation:
+        os.makedirs("results/no_adaptation_no_shuffle", exist_ok=True)
+        logger = Logger(log_dir="results/no_adaptation_no_shuffle")
+    else:
+        logger = Logger(log_dir="results")
 
     # Load dataset and split it according to the number of devices
-    if dataset == "cifar10":
-        from data.cifar10 import load_datasets
-        trainsets, valsets, testset = load_datasets(num_devices)
-    else:
-        raise ValueError(f"Dataset {dataset} not implemented")
+    trainsets, valsets, testset = load_datasets(num_devices)
+
 
     devices_per_user = num_devices // num_users
     users = [User(id=i, 
                   devices=[Device(j+(devices_per_user*i), trainsets.pop(), valsets.pop()) for j in range(devices_per_user)],
-                  logger=logger,
                   testset=testset) for i in range(num_users)]
-    
-    # Print devices configuration
-    for user in users:
-        for device in user.devices:
-            print(device)
 
-    model = nets.AdaptiveCifar10CNN
-    server = Server(dataset, model, users, logger)
+    server = Server(nets.AdaptiveCifar10CNN, users, logger)
 
     # Evaluate the server model before training
     initial_loss, initial_accuracy = server.test(testset)
@@ -61,8 +53,11 @@ def main():
         
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
-        server.train()
-        
+        if no_adaptation:
+            server.train_no_adaptation_no_shuffle()
+        else:
+            server.train()
+
         # Server evaluates the model
         loss, accuracy = server.test(testset)
 
@@ -70,7 +65,10 @@ def main():
         print(f"S, e{epoch} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
 
     logger.dump()
-    print(f"Elapsed Time: {str(timedelta(seconds=time() - time_start))}")
+
+
+    # Run without adaptation and shuffling
+
 
 
 if __name__ == "__main__":

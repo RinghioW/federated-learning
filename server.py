@@ -1,15 +1,16 @@
 import torch
 import torchvision
 from statistics import fmean
+import time
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Server():
-    def __init__(self, dataset, model, users, logger):
+    def __init__(self, model, users, logger, dataset="cifar10"):
         self.model = model
         torch.save({'model_state_dict': model().state_dict()}, "checkpoints/server.pt")
         self.dataset = dataset
         self.users = users
-        self.wall_clock_training_times = None
+        self.wall_clock_training_times = [0.] * len(users)
         self.scaling_factor = 0.5
         self.init = False
         self.logger = logger
@@ -68,25 +69,23 @@ class Server():
             user.adaptive_scaling_factor = (avg_user_performance / performance) * self.scaling_factor
 
     # Select users for the next round of training
-    def _select_users(self, split=1.):
+    def _select_users(self):
         # TODO: Select users
         pass
 
         for user in self.users:
             user.model = self.model
+            user.logger = self.logger
 
-        # self.users = random.choices(users, k=math.floor(split*len(users)))
-        self.wall_clock_training_times = [1.] * len(self.users)
 
-    def _poll_users(self, kd_epochs, on_device_epochs, adapt=True, shuffle=True):
-        transferred_samples = []
-        for user in self.users:
+    def _poll_users(self, kd_epochs, on_device_epochs):
+        for user_id, user in enumerate(self.users):
             # User trains devices
             # ShuffleFL step 11-15
-            n_transferred_samples = user.train(kd_epochs, on_device_epochs)
-            transferred_samples.append(n_transferred_samples)
-            print(f"User validation {user.id} accuracy: {user.validate()}")
-        return transferred_samples
+            initial_time = time.time()
+            user.train(kd_epochs, on_device_epochs)
+            self.wall_clock_training_times[user_id] = time.time() - initial_time
+            self.logger.u_log_test(user_id, user.validate())
 
     def train(self):
         # Choose the users for the next round of training
@@ -100,8 +99,7 @@ class Server():
             self._send_adaptive_scaling_factor()
 
         # Wait for users to send their model
-        # TODO: Should return training times
-        _ = self._poll_users(kd_epochs=10, on_device_epochs=10)
+        self._poll_users(kd_epochs=10, on_device_epochs=10)
 
         # Aggregate the updates from the users
         self._aggregate_updates()
@@ -110,3 +108,30 @@ class Server():
 
         if not self.init:
             self.init = True
+
+    def train_no_adaptation_no_shuffle(self):
+        # Choose the users for the next round of training
+        self._select_users()
+
+        # Log new epoch
+        self.logger.new_epoch(len(self.users))
+
+        # Wait for users to send their model
+        self._poll_users_no_adaptation_no_shuffle(on_device_epochs=10)
+
+        # Aggregate the updates from the users
+        self._aggregate_updates()
+
+        self.logger.s_log_latency(self.wall_clock_training_times)
+
+        if not self.init:
+            self.init = True
+
+    def _poll_users_no_adaptation_no_shuffle(self, on_device_epochs):
+        for user_id, user in enumerate(self.users):
+            # User trains devices
+            # ShuffleFL step 11-15
+            initial_time = time.time()
+            user.train_no_adaptation_no_shuffle(on_device_epochs)
+            self.wall_clock_training_times[user_id] = time.time() - initial_time
+            user.logger.u_log_test(user_id, user.validate())

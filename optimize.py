@@ -3,7 +3,6 @@ from scipy.optimize import minimize
 from scipy.spatial.distance import jensenshannon
 from typing import List
 # It's needed to compute data imbalance and optimize the data shuffling
-DI_SCALING = 10e4
 # Function for optimizing equation 7 from ShuffleFL
 def optimize_transmission_matrices(adaptive_scaling_factor: float,
                                    cluster_distributions: List[int],
@@ -26,9 +25,9 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
         latencies = np.array(_latencies(uplinks, downlinks, computes, transition_matrices, cluster_distributions, cluster_distributions_post_shuffle))
 
 
-        data_imbalance = np.mean(data_imbalances) * DI_SCALING
+        data_imbalance = np.mean(data_imbalances) * adaptive_scaling_factor
         system_latency = np.amax(latencies)
-        obj_func = system_latency + data_imbalance
+        obj_func = system_latency * data_imbalance
         logger.u_log_optimization(id, obj_func, system_latency, data_imbalance)
 
         return obj_func

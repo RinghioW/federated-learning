@@ -2,16 +2,7 @@ import os
 import json
 
 class Logger:
-    # TODO: figure out a way 
-    # to log the same run but with different metrics such 
-    # as the run without shuffle and a run without adaptation
-    # but the problem is that the time taken for all these separate runs is going to be too much
-    # So best is to keep the data in place, and have different datasets for each version
-    # So have a separate metric for the dataset without shuffle and the model without adaptation
-    # In that case, we will have the best of both worlds 
-    # Another alternative is to launch separate runs on different computes
-    # But the data will be different in that case, unless we manage to really get the seed right
-    # The federateddataset api does offer an option to set the seed so it should be doable
+
     # Epoch: id
     # |--- "Server"
     #     |--- Accuracy: float
@@ -70,19 +61,23 @@ class Logger:
         self.log[self.epoch]["users"][user_id]["train_ce_loss"] = ce_loss
         self.log[self.epoch]["users"][user_id]["train_accuracy"] = accuracy
 
-    def u_log_latency(self, user_id, latencies):
+    def u_log_devices_test(self, user_id, accuracies):
+        for device_id, accuracy in enumerate(accuracies):
+            self.log[self.epoch]["users"][user_id]["devices"][device_id]["accuracy"] = accuracy
+
+    def u_log_latencies(self, user_id, latencies):
         for device_id, latency in enumerate(latencies):
             self.log[self.epoch]["users"][user_id]["devices"][device_id]["latency"] = latency
 
-    def u_log_data_imbalance(self, user_id, imbalances):
+    def u_log_data_imbalances(self, user_id, imbalances):
         for device_id, imbalance in enumerate(imbalances):
             self.log[self.epoch]["users"][user_id]["devices"][device_id]["data_imbalance"] = imbalance
 
-    def u_log_energy(self, user_id, energies):
+    def u_log_energies(self, user_id, energies):
         for device_id, energy in enumerate(energies):
             self.log[self.epoch]["users"][user_id]["devices"][device_id]["energy_usage"] = energy
 
-    def u_log_memory(self, user_id, memories):
+    def u_log_memories(self, user_id, memories):
         for device_id, memory in enumerate(memories):
             self.log[self.epoch]["users"][user_id]["devices"][device_id]["memory_usage"] = memory
 

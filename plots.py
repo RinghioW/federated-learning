@@ -56,96 +56,104 @@ def plot():
         plt.savefig(os.path.join("results", "server_latency.png"))
         plt.close()
 
-        # for user_id, user in log[0]["users"].items():
-        #     accuracies = [log[epoch]["users"][user_id]["test_accuracy"] for epoch in epochs]
-        #     kd_losses = [user[epoch]["train_kd_loss"] for epoch in epochs]
-        #     ce_losses = [user[epoch]["train_ce_loss"] for epoch in epochs]
-        #     train_accuracies = [user[epoch]["train_accuracy"] for epoch in epochs]
-        #     latencies = [user[epoch]["latency"] for epoch in epochs]
-        #     data_imbalances = [user[epoch]["data_imbalance"] for epoch in epochs]
-        #     energy_usages = [user[epoch]["energy_usage"] for epoch in epochs]
-        #     memory_usages = [user[epoch]["memory_usage"] for epoch in epochs]
+        for user_id, user in log["0"]["users"].items():
+            accuracies = [log[epoch]["users"][user_id]["test_accuracy"] for epoch in epochs]
+            kd_losses = [log[epoch]["users"][user_id]["train_kd_loss"] for epoch in epochs]
+            ce_losses = [log[epoch]["users"][user_id]["train_ce_loss"] for epoch in epochs]
+            train_accuracies = [log[epoch]["users"][user_id]["train_accuracy"] for epoch in epochs]
+            for device_id, device in user["devices"].items():
+                accuracies = [log[epoch]["users"][user_id]["devices"][device_id]["accuracy"] for epoch in epochs]
+                losses = [log[epoch]["users"][user_id]["devices"][device_id]["loss"] for epoch in epochs]
+                latencies = [log[epoch]["users"][user_id]["devices"][device_id]["latency"] for epoch in epochs]
+                data_imbalances = [log[epoch]["users"][user_id]["devices"][device_id]["data_imbalance"] for epoch in epochs]
+                energy_usages = [log[epoch]["users"][user_id]["devices"][device_id]["energy_usage"] for epoch in epochs]
+                memory_usages = [log[epoch]["users"][user_id]["devices"][device_id]["memory_usage"] for epoch in epochs]
 
-        #     plt.title(f"User {user_id} Test Accuracy")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Accuracy")
-        #     plt.plot(epochs, accuracies)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_test_accuracy.png"))
-        #     plt.close()
+                # Plot device metrics
+                plt.title(f"User {user_id} Device {device_id} Accuracy")
+                plt.xlabel("Epoch")
+                plt.ylabel("Accuracy")
+                plt.plot(epochs, accuracies)
+                plt.savefig(os.path.join("results", f"user_{user_id}_device_{device_id}_accuracy.png"))
+                plt.close()
 
-        #     plt.title(f"User {user_id} KD Loss")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Loss")
-        #     plt.plot(epochs, kd_losses)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_kd_loss.png"))
-        #     plt.close()
+                plt.title(f"User {user_id} Device {device_id} Loss")
+                plt.xlabel("Epoch")
+                plt.ylabel("Loss")
+                plt.plot(epochs, losses)
+                plt.savefig(os.path.join("results", f"user_{user_id}_device_{device_id}_loss.png"))
+                plt.close()
 
-        #     plt.title(f"User {user_id} CE Loss")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Loss")
-        #     plt.plot(epochs, ce_losses)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_ce_loss.png"))
-        #     plt.close()
+                plt.title(f"User {user_id} Device {device_id} Latency")
+                plt.xlabel("Epoch")
+                plt.ylabel("Latency")
+                plt.plot(epochs, latencies)
+                plt.savefig(os.path.join("results", f"user_{user_id}_device_{device_id}_latency.png"))
+                plt.close()
 
-        #     plt.title(f"User {user_id} Train Accuracy")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Accuracy")
-        #     plt.plot(epochs, train_accuracies)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_train_accuracy.png"))
-        #     plt.close()
+                plt.title(f"User {user_id} Device {device_id} Data Imbalance")
+                plt.xlabel("Epoch")
+                plt.ylabel("Data Imbalance")
+                plt.plot(epochs, data_imbalances)
+                plt.savefig(os.path.join("results", f"user_{user_id}_device_{device_id}_data_imbalance.png"))
+                plt.close()
 
-        #     plt.title(f"User {user_id} Latency")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Latency")
-        #     plt.plot(epochs, latencies)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_latency.png"))
-        #     plt.close()
+                plt.title(f"User {user_id} Device {device_id} Energy Usage")
+                plt.xlabel("Epoch")
+                plt.ylabel("Energy Usage")
+                plt.plot(epochs, energy_usages)
+                plt.savefig(os.path.join("results", f"user_{user_id}_device_{device_id}_energy_usage.png"))
+                plt.close()
 
-        #     plt.title(f"User {user_id} Data Imbalance")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Data Imbalance")
-        #     plt.plot(epochs, data_imbalances)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_data_imbalance.png"))
-        #     plt.close()
+                plt.title(f"User {user_id} Device {device_id} Memory Usage")
+                plt.xlabel("Epoch")
+                plt.ylabel("Memory Usage")
+                plt.plot(epochs, memory_usages)
+                plt.savefig(os.path.join("results", f"user_{user_id}_device_{device_id}_memory_usage.png"))
+                plt.close()
 
-        #     plt.title(f"User {user_id} Energy Usage")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Energy Usage")
-        #     plt.plot(epochs, energy_usages)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_energy_usage.png"))
-        #     plt.close()
+                
 
-        #     plt.title(f"User {user_id} Memory Usage")
-        #     plt.xlabel("Epoch")
-        #     plt.ylabel("Memory Usage")
-        #     plt.plot(epochs, memory_usages)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_memory_usage.png"))
-        #     plt.close()
+            plt.title(f"User {user_id} Test Accuracy")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.plot(epochs, accuracies)
+            plt.savefig(os.path.join("results", f"user_{user_id}_test_accuracy.png"))
+            plt.close()
 
-        #     # Plot optimization
-        #     objs = user["optimization"]["objective"]
-        #     latencies = user["optimization"]["latency"]
-        #     data_imbalances = user["optimization"]["data_imbalance"]
+            plt.title(f"User {user_id} KD Loss")
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.plot(epochs, kd_losses, color="orange")
+            plt.plot(epochs, ce_losses, color="blue")
+            plt.legend(["KD Loss", "CE Loss"])
+            plt.savefig(os.path.join("results", f"user_{user_id}_train_loss.png"))
+            plt.close()
 
-        #     plt.title(f"User {user_id} Objective Function")
-        #     plt.xlabel("Step")
-        #     plt.ylabel("Objective Function")
-        #     plt.plot(objs)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_objective.png"))
-        #     plt.close()
+            plt.title(f"User {user_id} Train Accuracy")
+            plt.xlabel("Epoch")
+            plt.ylabel("Accuracy")
+            plt.plot(epochs, train_accuracies)
+            plt.savefig(os.path.join("results", f"user_{user_id}_train_accuracy.png"))
+            plt.close()
 
-        #     plt.title(f"User {user_id} Latency")
-        #     plt.xlabel("Step")
-        #     plt.ylabel("Latency")
-        #     plt.plot(latencies)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_latency.png"))
-        #     plt.close()
 
-        #     plt.title(f"User {user_id} Data Imbalance")
-        #     plt.xlabel("Step")
-        #     plt.ylabel("Data Imbalance")
-        #     plt.plot(data_imbalances)
-        #     plt.savefig(os.path.join("results", f"user_{user_id}_data_imbalance.png"))
-        #     plt.close()
+            # Plot optimization
+            objs = [log[epoch]["users"][user_id]["optimization"]["objective"] for epoch in epochs]
+            latencies = [log[epoch]["users"][user_id]["optimization"]["latency"] for epoch in epochs]
+            data_imbalances = [log[epoch]["users"][user_id]["optimization"]["data_imbalance"] for epoch in epochs]
+            for ob, la, d, i in zip(objs, latencies, data_imbalances, range(len(objs))):
+                # Plot objective function
+                plt.title(f"User {user_id} Objective Function")
+                plt.xlabel("Epoch")
+                plt.ylabel("Objective Function")
+                plt.plot(ob)
+                plt.plot(la)
+                plt.plot(d)
+                plt.legend(["Objective Function", "Latency", "Data Imbalance"])
+                plt.savefig(os.path.join("results", f"user_{user_id}_objective_{i}.png"))
+                plt.close()
+
+
 
 plot()
