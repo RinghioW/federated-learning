@@ -158,6 +158,8 @@ class Device():
         return len(self.dataset) / self.config["energy_budget"]
     
     def data_imbalance(self):
+        if len(self.dataset) == 0:
+            return np.float64(0.)
         distribution = np.bincount(self.dataset["label"], minlength=10)
         n_samples = sum(distribution)
         if n_samples == 0:
