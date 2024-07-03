@@ -96,14 +96,14 @@ class AdaptiveCifar10CNN(nn.Module):
     def _ptq(self, calibration_data):
         self.eval()
         self.qconfig = torch.ao.quantization.get_default_qat_qconfig("x86")
-        fused_self = torch.ao.quantization.fuse_modules(self, [['conv1', 'bn1', 'conv2', 'bn2', 'pool1'],
+        torch.ao.quantization.fuse_modules(self, [['conv1', 'bn1', 'conv2', 'bn2', 'pool1'],
                                                                 ['conv3', 'bn3', 'conv4', 'bn4', 'pool2'],
                                                                 ['conv5', 'bn5', 'conv6', 'bn6', 'pool3'],
-                                                                ['fc1', 'fc2']])
-        torch.ao.quantization.prepare(fused_self, inplace=True)
-        fused_self(calibration_data)
-        torch.ao.quantization.convert(fused_self, inplace=True)
-        self = fused_self
+                                                                ['fc1', 'fc2']], inplace=True)
+        torch.ao.quantization.prepare(self, inplace=True)
+        self(calibration_data)
+        torch.ao.quantization.convert(self, inplace=True)
+    
     def _prune(self, pruning_factor):
         # TODO: Weights should be the same as when the network was first initialized on the device for pruning to be consistent
         for _, layer in self.named_modules():
