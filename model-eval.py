@@ -4,7 +4,7 @@ from nets import AdaptiveCifar10CNN
 import torch.profiler
 import os
 import random
-from data.cifar10 import load_datasets
+from data.cifar10 import load_iid_datasets
 import torchvision.transforms as transforms
 import datetime
 from torch.utils.tensorboard import SummaryWriter
@@ -67,7 +67,7 @@ writer = SummaryWriter("log")
 def profile_inference(trainset, model, name):
     name = name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     batch_size = 32
-    dataloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size)
+    dataloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, num_workers=3)
     model.eval()
     res = None
     with torch.profiler.profile(
@@ -89,16 +89,14 @@ def profile_inference(trainset, model, name):
             e+=1
 
     res = prof.key_averages().table(sort_by="self_cpu_time_total")
-    prof.export_chrome_trace("log/" + name + "_inference.json")
-    prof.export_memory_timeline("log/" + name + "_inference_memory.json")
     return res
 
 
 
-def profile_train(trainset, model, epochs, name):
+def profile_train(trainset, model, name, epochs=10):
     name = name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     batch_size = 32
-    dataloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size)
+    dataloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, num_workers=3)
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
@@ -134,50 +132,55 @@ os.system('rm log/*')
 # targets = [Target.generate(i) for i in range(3)]
 
 # Create the model in different configurations
-default_model = AdaptiveCifar10CNN()
 
-pruned_model = AdaptiveCifar10CNN()
-pruned_model.prune(0.5)
-
-quantized_model = AdaptiveCifar10CNN()
-quantized_model.quantize()
-
-low_rank_model = AdaptiveCifar10CNN()
-low_rank_model.low_rank()
 
 # Get a batch (32 samples) of CIFAR10
-trainset, valset, testset = load_datasets(10)
+trainset, valset, testset = load_iid_datasets(10)
 
 trainset = trainset[0]
 
-
-# Profile the models
 to_tensor = transforms.ToTensor()
 trainset = trainset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+epochs = 10
 
+# Profile the models
+
+
+# default_model = AdaptiveCifar10CNN()
+# res = profile_train(trainset=trainset, model=default_model, epochs=epochs, name="default")
+# print(res)
 # res = profile_inference(trainset, default_model, "default")
 # print(res)
 
+# pruned_model = AdaptiveCifar10CNN()
+# pruned_model._prune(0.5)
+# res = profile_train(trainset=trainset, model=pruned_model, epochs=epochs, name="pruned")
+# print(res)
 # res= profile_inference(trainset, pruned_model, "pruned")
 # print(res)
+
+# QAT
+# quantized_model = AdaptiveCifar10CNN()
+# quantized_model._qat(dataset=trainset, q_epochs=10)
 
 # res= profile_inference(trainset, quantized_model, "quantized")
 # print(res)
 
-# res =profile_inference(trainset, low_rank_model, "low_rank")
+# # PTQ
+# quantized_model = AdaptiveCifar10CNN()
+# res = profile_train(trainset=trainset, model=quantized_model, epochs=epochs, name="quantized")
+# print(res)
+# quantized_model._ptq(calibration_data=trainset)
+# res= profile_inference(trainset, quantized_model, "quantized")
 # print(res)
 
-epochs = 10
-res = profile_train(trainset, default_model, epochs, "default")
+
+low_rank_model = AdaptiveCifar10CNN()
+low_rank_model._low_rank()
+res = profile_train(trainset=trainset, model=low_rank_model, epochs=epochs, name="low_rank")
+print(res)
+res =profile_inference(trainset, low_rank_model, "low_rank")
 print(res)
 
-# res= profile_train(trainset, pruned_model, "pruned")
-# print(res)
-
-# res= profile_train(trainset, quantized_model, "quantized")
-# print(res)
-
-# res =profile_train(trainset, low_rank_model, "low_rank")
-# print(res)
 
 writer.close()

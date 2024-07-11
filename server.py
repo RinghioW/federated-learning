@@ -37,6 +37,8 @@ class Server():
         net = self.model()
         checkpoint = torch.load("checkpoints/server.pt")
         net.load_state_dict(checkpoint['model_state_dict'])
+        if torch.cuda.is_available():
+            net = net.to(DEVICE)
         net.eval()
         
         """Evaluate the network on the entire test set."""

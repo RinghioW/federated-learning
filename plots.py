@@ -156,5 +156,31 @@ def plot(spath):
             #     plt.close()
 
 
-spath = "results/no_adaptation_no_shuffle/"
-plot(spath)
+with open("log.json", "r") as f, open("no_adaptation_log.json", "r") as d:
+    log = json.load(f)
+    dlog = json.load(d)
+    # Plot server metrics
+    # Extract epochs
+    epochs = list(log.keys())[1:]
+
+    # Server metrics
+    accuracies = [log[epoch]["server"]["accuracy"] for epoch in epochs]
+    d_accuracies = [dlog[epoch]["server"]["accuracy"] for epoch in epochs]
+
+    plt.title("Server Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.plot(epochs, accuracies, color="orange")
+    plt.plot(epochs, d_accuracies, color="blue")
+    plt.legend(["Adaptation", "No Adaptation"])
+    plt.savefig("comparison.png")
+    plt.close()
+
+    plt.title("Server Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.plot(epochs, [log[epoch]["server"]["loss"] for epoch in epochs], color="orange")
+    plt.plot(epochs, [dlog[epoch]["server"]["loss"] for epoch in epochs], color="blue")
+    plt.legend(["Adaptation", "No Adaptation"])
+    plt.savefig("comparison_loss.png")
+    plt.close()

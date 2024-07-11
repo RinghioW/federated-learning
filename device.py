@@ -48,6 +48,7 @@ class Device():
 
         
         self.instantiated_model = None
+        self.quantized = False
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
@@ -57,8 +58,16 @@ class Device():
         if len(self.dataset) == 0:
             return
 
+
+        # If the model was quantized, training already happened. So let's just freeze it
+        if self.quantized:
+            return
+        
         # Load the model
         net = self.instantiated_model
+        if torch.cuda.is_available():
+            net = net.to(DEVICE)
+
         net.train()
 
         optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
@@ -79,11 +88,12 @@ class Device():
                 loss.backward()
                 optimizer.step()
 
-
+        
+        # Save the model
+        self.instantiated_model = net
     
     # Function to sample a sub-dataset from the dataset
-    # TODO: Implement uplink in a sensible way
-    def sample(self, percentage, uplink=None):
+    def sample(self, percentage):
         amount = math.floor(percentage * len(self.dataset))
         reduced_dataset = np.random.permutation(self.dataset)[:amount].tolist()
         return reduced_dataset
@@ -104,7 +114,12 @@ class Device():
         quantize = params["quantize"]
         pruning_factor = params["pruning_factor"]
         low_rank = params["low_rank"]
-        net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank)
+        # TODO: In case of quantization, we need to train the model for a few epochs
+        if quantize:
+            self.quantized = True
+            net._qat(self.dataset, q_epochs=5)
+        else:
+            net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank)
         self.instantiated_model = net
 
     def validate(self):
@@ -169,5 +184,3 @@ class Device():
         balanced_distribution = [avg_samples] * n_classes
         js = jensenshannon(balanced_distribution, distribution)
         return js
-
-    

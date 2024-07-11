@@ -77,8 +77,11 @@ class User():
     # Train the user model using knowledge distillation
     def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
         student = self.model()
+        
         checkpoint = torch.load("checkpoints/server.pt")
         student.load_state_dict(checkpoint['model_state_dict'])
+        if torch.cuda.is_available():
+            student = student.to(DEVICE)
         student.train()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -87,7 +90,7 @@ class User():
         # option 2 -> average the teacher logits from all devices
         teachers = [] 
         for device in self.devices:
-            teacher = device.instantiated_model
+            teacher = device.instantiated_model.to(DEVICE)
             teacher.eval()
             teachers.append(teacher)
         
@@ -148,11 +151,12 @@ class User():
         # Log device configs
         self.logger.u_log_configs(self.id,[d.config for d in self.devices])
 
-        # Adapt the model
-        self._adapt_model(self.model)
-
+        # Shuffle according to ShuffleFL
         n_transferred_samples = self._shuffle()
         self.n_transferred_samples = n_transferred_samples
+
+        # Adapt the model
+        self._adapt_model(self.model)
 
         # Train the devices
         for device in self.devices:
@@ -234,12 +238,21 @@ class User():
         # Compute the staleness factor
         return data_processed / (data_processed + self.n_transferred_samples)
     
-    def _create_kd_dataset(self, percentage=0.2):
-        self.kd_dataset = self._sample_devices(percentage)
+    def _create_kd_dataset(self):
+        percentages = self._uplink_percentages()
+        self.kd_dataset = self._sample_devices(percentages)
     
-    # TODO: Have as parameter the uplink rate of the devices
+    def _uplink_percentages(self):
+        # Sample based on the uplink rate of the devices
+        uplinks = [device.config["uplink_rate"] for device in self.devices]
+        s = sum(uplinks)
+        percentages = [uplink / s for uplink in uplinks]
+        return percentages
+
     def _compute_centroids(self):
-        dataset = self._sample_devices(.1)
+        # Sample based on the uplink rate of the devices
+        percentages = self._uplink_percentages()
+        dataset = self._sample_devices(percentages)
         features = np.array(dataset["img"]).reshape(len(dataset), -1)
         labels = np.array(dataset["label"])
 
@@ -251,10 +264,10 @@ class User():
 
         return lda, kmeans
     
-    def _sample_devices(self, percentage):
+    def _sample_devices(self, percentages):
         # Assemble the entire dataset from the devices
         dataset = []
-        for device in self.devices:
+        for device, percentage in zip(self.devices, percentages):
             dataset.extend(device.sample(percentage))
         return datasets.Dataset.from_list(dataset)
 
