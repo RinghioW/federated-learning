@@ -15,7 +15,6 @@ class Logger:
     #         |--- Loss
     #         |--- Latency
     #         |--- Data Imbalance
-    #         |--- Energy Usage
     #         |--- Memory Usage
     #     |--- "Optimization"
     #       |--- Step: int
@@ -40,6 +39,8 @@ class Logger:
         self.log[self.epoch] = {"server": {}, "users": {i: {} for i in range(n_users)}}
         self.server = self.log[self.epoch]["server"]
         self.users = self.log[self.epoch]["users"]
+        # Dump every epoch
+        self.dump()
 
     # Server
     def s_log_test(self, accuracy, loss):
@@ -76,10 +77,6 @@ class Logger:
     def u_log_data_imbalances(self, user_id, imbalances):
         for device_id, imbalance in enumerate(imbalances):
             self.users[user_id]["devices"][device_id]["data_imbalance"] = imbalance
-
-    def u_log_energies(self, user_id, energies):
-        for device_id, energy in enumerate(energies):
-            self.users[user_id]["devices"][device_id]["energy_usage"] = energy
 
     def u_log_memories(self, user_id, memories):
         for device_id, memory in enumerate(memories):

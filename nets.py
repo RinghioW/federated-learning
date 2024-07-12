@@ -5,8 +5,51 @@ import torch.nn.functional as F
 import torch.nn.utils.prune as prune
 import optimum.quanto as quanto
 import torchvision.transforms as transforms
+import tensorly as tl
+from tensorly.decomposition import tucker
+
+
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+tl.set_backend("pytorch")
+class DecomposedConv2d(nn.Module):
+    def __init__(self, original_layer, rank):
+        super(DecomposedConv2d, self).__init__()
+        self.rank = rank
+        
+        # Decompose the original layer's weights
+        self.core, self.factors = tucker(original_layer.weight.data, rank=self.rank)
+        
+        # Register the decomposed components as parameters
+        self.core = nn.Parameter(self.core)
+        self.factors = [nn.Parameter(factor) for factor in self.factors]
+        for i, factor in enumerate(self.factors):
+            self.register_parameter(f'factor_{i}', self.factors[i])
+
+        # Store the original layer's bias
+        if original_layer.bias is not None:
+            self.bias = nn.Parameter(original_layer.bias.data)
+        else:
+            self.bias = None
+            
+        # Store layer attributes
+        self.in_channels = original_layer.in_channels
+        self.out_channels = original_layer.out_channels
+        self.kernel_size = original_layer.kernel_size
+        self.stride = original_layer.stride
+        self.padding = original_layer.padding
+        self.dilation = original_layer.dilation
+        self.groups = original_layer.groups
+
+    def forward(self, x):
+        # Recompute the weight matrix
+        weight = tl.tucker_to_tensor((self.core, self.factors))
+        
+        # Perform the convolution
+        return nn.functional.conv2d(x, weight, self.bias, self.stride,
+                                    self.padding, self.dilation, self.groups)
+                
+
 class SVDLinear(nn.Module):
     def __init__(self, linear_layer, truncation_rank=10):
         super(SVDLinear, self).__init__()
@@ -115,6 +158,9 @@ class AdaptiveCifar10CNN(nn.Module):
         for name, module in self.named_children():
             if isinstance(module, nn.Linear):
                 setattr(self, name, SVDLinear(module, truncation_rank))
+            elif isinstance(module, nn.Conv2d):
+                setattr(self, name, DecomposedConv2d(module, truncation_rank))
+
     
     def adapt(self, state_dict=None, pruning_factor=0., quantize=False, low_rank=False, calibration_data=None):
         if state_dict is not None:

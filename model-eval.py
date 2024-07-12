@@ -7,41 +7,38 @@ import random
 from data.cifar10 import load_iid_datasets
 import torchvision.transforms as transforms
 import datetime
+import time
 from torch.utils.tensorboard import SummaryWriter
 class Target:
 
-    def __init__(self, id, compute, memory, energy_budget):
+    def __init__(self, id, compute, memory):
         self.id = id
         self.compute = compute
         self.memory = memory
-        self.energy_budget = energy_budget
 
     JETSON_NANO_CONFIG = {
-    'name' : 'Jetson Nano',
-    'compute' : 472, # GFLOPS
-    'memory': 4, # GB
-    'energy_budget': 10, # W
+        'name' : 'Jetson Nano',
+        'compute' : 472, # GFLOPS
+        'memory': 4, # GB
     }
 
     JETSON_XAVIER_NX_8GB_CONFIG = {
         'name' : 'Jetson Xavier NX 8GB',
         'compute' : 21, # TOPS
         'memory': 8, # GB
-        'energy_budget': 20, # W
     }
 
     RASPBERRY_PI_4_CONFIG = {
         'name' : 'Raspberry Pi 4 Model B',
         'compute' : 9.69, # GFLOPS
         'memory': 4, # GB
-        'energy_budget': 7, # W
     }
     models = [RASPBERRY_PI_4_CONFIG, JETSON_NANO_CONFIG, JETSON_XAVIER_NX_8GB_CONFIG]
 
     @staticmethod
     def generate(id):
         model = random.choice(Target.models)
-        return Target(id, model['compute'], model['memory'], model['energy_budget'])
+        return Target(id, model['compute'], model['memory'])
     
 
 
@@ -54,13 +51,12 @@ def model_size(model):
     return (s, z)
 
 
-# Function to measure the energy consumption of the model
-def energy_consumption(model, target: Target):
-    pass
-
 # Function to measure the latency of the model
-def latency(model, target: Target):
-    pass
+def latency_start():
+    return time.time()
+
+def latency(start_time):
+    return start_time - time.time()
 
 writer = SummaryWriter("log")
 

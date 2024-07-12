@@ -13,21 +13,18 @@ JETSON_NANO_CONFIG = {
     'name' : 'Jetson Nano',
     'compute' : 472, # GFLOPS
     'memory': 4, # GB
-    'energy_budget': 10, # W
 }
 
 JETSON_XAVIER_NX_8GB_CONFIG = {
     'name' : 'Jetson Xavier NX 8GB',
     'compute' : 21, # TOPS
     'memory': 8, # GB
-    'energy_budget': 20, # W
 }
 
 RASPBERRY_PI_4_CONFIG = {
     'name' : 'Raspberry Pi 4 Model B',
     'compute' : 9.69, # GFLOPS
     'memory': 4, # GB
-    'energy_budget': 7, # W
 }
 
 NUM_CLASSES = 10
@@ -140,7 +137,7 @@ class Device():
         return correct / total
 
     def resources(self):
-        return self.memory_usage() + self.computation_time() + self.energy_usage()
+        return self.memory_usage() + self.computation_time()
 
     # The higher these numbers are, the higher the latency factor will be
     # If the latency is really high, this means that SL >> DI,
@@ -152,7 +149,6 @@ class Device():
         return {"id" : id,
                 "compute" : 1. + np.random.rand(), # Compute capability in FLOPS
                 "memory" : 1. + np.random.rand(), # Memory capability in Bytes
-                "energy_budget" : 1. + np.random.rand(), # Energy budget in J/hour
                 "uplink_rate" : 1. + np.random.rand(), # Uplink rate in Bps
                 "downlink_rate" : 1. + np.random.rand() # Downlink rate in Bps
                 }
@@ -169,8 +165,6 @@ class Device():
     def computation_time(self):
         return self.config["compute"]*len(self.dataset)
     
-    def energy_usage(self):
-        return len(self.dataset) / self.config["energy_budget"]
     
     def data_imbalance(self):
         if len(self.dataset) == 0:

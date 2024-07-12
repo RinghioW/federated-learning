@@ -151,24 +151,29 @@ class User():
         # Log device configs
         self.logger.u_log_configs(self.id,[d.config for d in self.devices])
 
+        print(f"USER {self.id}: Shuffling")
         # Shuffle according to ShuffleFL
         n_transferred_samples = self._shuffle()
         self.n_transferred_samples = n_transferred_samples
 
+        print(f"USER {self.id}: Adapting model")
         # Adapt the model
         self._adapt_model(self.model)
 
+        print(f"USER {self.id}: Training devices")
         # Train the devices
         for device in self.devices:
+            print(f"DEVICE {device.id}: Training")
             device.train(on_device_epochs)
         
         self.logger.u_log_devices_test(self.id, [device.validate() for device in self.devices])
         self.logger.u_log_latencies(self.id, [device.computation_time() for device in self.devices])
-        self.logger.u_log_energies(self.id, [device.energy_usage() for device in self.devices])
         self.logger.u_log_memories(self.id, [device.memory_usage() for device in self.devices])
         self.logger.u_log_data_imbalances(self.id, [device.data_imbalance() for device in self.devices])
         # Create the knowledge distillation dataset
         self._create_kd_dataset()
+
+        print(f"USER {self.id}: Aggregating updates")
 
         # Aggregate the updates
         self._aggregate_updates(epochs=kd_epochs)
@@ -303,7 +308,6 @@ class User():
         
         self.logger.u_log_devices_test(self.id, [device.validate() for device in self.devices])
         self.logger.u_log_latencies(self.id, [device.computation_time() for device in self.devices])
-        self.logger.u_log_energies(self.id, [device.energy_usage() for device in self.devices])
         self.logger.u_log_memories(self.id, [device.memory_usage() for device in self.devices])
         self.logger.u_log_data_imbalances(self.id, [device.data_imbalance() for device in self.devices])
 

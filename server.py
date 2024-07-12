@@ -90,6 +90,7 @@ class Server():
             self.logger.u_log_test(user_id, user.validate())
 
     def train(self):
+        print("SERVER: Selecting users")
         # Choose the users for the next round of training
         self._select_users()
 
@@ -100,9 +101,11 @@ class Server():
         if self.init:
             self._send_adaptive_scaling_factor()
 
+        print("SERVER: Polling users")
         # Wait for users to send their model
         self._poll_users(kd_epochs=10, on_device_epochs=10)
 
+        print("SERVER: Aggregating updates")
         # Aggregate the updates from the users
         self._aggregate_updates()
 

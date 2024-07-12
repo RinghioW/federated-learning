@@ -67,7 +67,6 @@ def plot(spath):
                 losses = [log[epoch]["users"][user_id]["devices"][device_id]["loss"] for epoch in epochs]
                 # latencies = [log[epoch]["users"][user_id]["devices"][device_id]["latency"] for epoch in epochs]
                 # data_imbalances = [log[epoch]["users"][user_id]["devices"][device_id]["data_imbalance"] for epoch in epochs]
-                # energy_usages = [log[epoch]["users"][user_id]["devices"][device_id]["energy_usage"] for epoch in epochs]
                 # memory_usages = [log[epoch]["users"][user_id]["devices"][device_id]["memory_usage"] for epoch in epochs]
 
                 # Plot device metrics
@@ -102,8 +101,6 @@ def plot(spath):
             #     plt.title(f"User {user_id} Device {device_id} Energy Usage")
             #     plt.xlabel("Epoch")
             #     plt.ylabel("Energy Usage")
-            #     plt.plot(epochs, energy_usages)
-            #     plt.savefig(os.path.join(spath, f"user_{user_id}_device_{device_id}_energy_usage.png"))
             #     plt.close()
 
             #     plt.title(f"User {user_id} Device {device_id} Memory Usage")

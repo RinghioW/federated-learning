@@ -51,6 +51,7 @@ def main():
     # ShuffleFL step 1, 2
     for epoch in range(server_epochs):
         
+        print("Epoch", epoch)
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
         if no_adaptation:
