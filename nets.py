@@ -4,27 +4,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.prune as prune
 import optimum.quanto as quanto
-import torchvision.transforms as transforms
 import tensorly as tl
 from tensorly.decomposition import tucker
 
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-tl.set_backend("pytorch")
 class DecomposedConv2d(nn.Module):
     def __init__(self, original_layer, rank):
         super(DecomposedConv2d, self).__init__()
         self.rank = rank
         
         # Decompose the original layer's weights
-        self.core, self.factors = tucker(original_layer.weight.data, rank=self.rank)
+        self.core, self.factors = tucker(original_layer.weight.data.to('cuda'), rank=self.rank)
         
         # Register the decomposed components as parameters
         self.core = nn.Parameter(self.core)
         self.factors = [nn.Parameter(factor) for factor in self.factors]
-        for i, factor in enumerate(self.factors):
-            self.register_parameter(f'factor_{i}', self.factors[i])
 
         # Store the original layer's bias
         if original_layer.bias is not None:
@@ -40,6 +36,8 @@ class DecomposedConv2d(nn.Module):
         self.padding = original_layer.padding
         self.dilation = original_layer.dilation
         self.groups = original_layer.groups
+        if torch.cuda.is_available():
+            self.cuda()
 
     def forward(self, x):
         # Recompute the weight matrix
@@ -108,14 +106,9 @@ class AdaptiveCifar10CNN(nn.Module):
     def _qat(self, dataset, q_epochs):
         # Quantize the model
         quanto.quantize(self, weights=quanto.qint8)
-
-        # Train the model for q_epochs
-        to_tensor = transforms.ToTensor()
-        dataset = dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         trainloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
         criterion = nn.CrossEntropyLoss()
-        if torch.cuda.is_available():
-            self.cuda()
+
         self.train()
         optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
         for epoch in range(q_epochs):
@@ -131,16 +124,14 @@ class AdaptiveCifar10CNN(nn.Module):
 
 
     def _ptq(self, calibration_data):
-        to_tensor = transforms.ToTensor()
-        calibration_data = calibration_data.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
 
         data = torch.utils.data.DataLoader(calibration_data, batch_size=32, num_workers=3)
-        if torch.cuda.is_available():
-            self.cuda()
+
         self.eval()
         self.qconfig = torch.ao.quantization.get_default_qat_qconfig("x86")
         # torch.ao.quantization.fuse_modules(self, [['bn1', 'relu1'], ['bn2', 'relu2'], ['bn3', 'relu3'], ['bn4', 'relu4'], ['bn5', 'relu5'], ['bn6', 'relu6'],])
         torch.ao.quantization.prepare(self, inplace=True)
+        self.cuda()
         for batch in data:
             self(batch["img"].to(DEVICE))
         torch.ao.quantization.convert(self, inplace=True)
@@ -152,7 +143,7 @@ class AdaptiveCifar10CNN(nn.Module):
             if isinstance(layer, (nn.Conv2d, nn.Linear)):
                 prune.ln_structured(module=layer, name="weight", amount=pruning_factor, n=2, dim=0)
                 prune.remove(layer, name="weight")
-    
+
     def _low_rank(self, truncation_rank=10):
         # TODO: Traverse all modules and replace Conv2d and Linear with SVD variants
         for name, module in self.named_children():
@@ -165,6 +156,9 @@ class AdaptiveCifar10CNN(nn.Module):
     def adapt(self, state_dict=None, pruning_factor=0., quantize=False, low_rank=False, calibration_data=None):
         if state_dict is not None:
             self.load_state_dict(state_dict)
+        
+        if torch.cuda.is_available():
+            self.cuda()
 
         if pruning_factor > 0.:
             self._prune(pruning_factor)

@@ -82,12 +82,12 @@ class Logger:
         for device_id, memory in enumerate(memories):
             self.users[user_id]["devices"][device_id]["memory_usage"] = memory
 
-    def u_log_optimization(self, user_id, objective, latency, data_imbalance):
-        if "optimization" not in self.users[user_id]:
-            self.users[user_id]["optimization"] = {"objective": [], "latency": [], "data_imbalance": []}
-        self.users[user_id]["optimization"]["objective"].append(objective)
-        self.users[user_id]["optimization"]["latency"].append(latency)
-        self.users[user_id]["optimization"]["data_imbalance"].append(data_imbalance)
+    # def u_log_optimization(self, user_id, objective, latency, data_imbalance):
+    #     if "optimization" not in self.users[user_id]:
+    #         self.users[user_id]["optimization"] = {"objective": [], "latency": [], "data_imbalance": []}
+    #     self.users[user_id]["optimization"]["objective"].append(objective)
+    #     self.users[user_id]["optimization"]["latency"].append(latency)
+    #     self.users[user_id]["optimization"]["data_imbalance"].append(data_imbalance)
 
 
 

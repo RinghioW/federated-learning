@@ -9,6 +9,8 @@ import torchvision.transforms as transforms
 import datetime
 import time
 from torch.utils.tensorboard import SummaryWriter
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Target:
 
     def __init__(self, id, compute, memory):
@@ -78,7 +80,7 @@ def profile_inference(trainset, model, name):
         e= 0
         for batch in dataloader:
             prof.step()
-            images, labels = batch["img"] , batch["label"]
+            images, labels = batch["img"].to(DEVICE) , batch["label"].to(DEVICE)
             output = model(images)
             accuracy = (output.argmax(1) == labels).float().mean()
             writer.add_scalar("Accuracy/test", accuracy.item(), e)
@@ -109,7 +111,7 @@ def profile_train(trainset, model, name, epochs=10):
         for e in range(epochs):
             for batch in dataloader:
                 prof.step()
-                images, labels = batch["img"], batch["label"]
+                images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
                 optimizer.zero_grad()
                 outputs = model(images)
                 loss = criterion(outputs, labels)
@@ -141,40 +143,55 @@ epochs = 10
 
 # Profile the models
 
+print("DEFAULT MODEL")
 
-# default_model = AdaptiveCifar10CNN()
-# res = profile_train(trainset=trainset, model=default_model, epochs=epochs, name="default")
-# print(res)
-# res = profile_inference(trainset, default_model, "default")
-# print(res)
+print("TRAIN")
+default_model = AdaptiveCifar10CNN()
+res = profile_train(trainset=trainset, model=default_model, epochs=epochs, name="default")
+print(res)
+print("INFERENCE")
+res = profile_inference(trainset, default_model, "default")
+print(res)
 
-# pruned_model = AdaptiveCifar10CNN()
-# pruned_model._prune(0.5)
-# res = profile_train(trainset=trainset, model=pruned_model, epochs=epochs, name="pruned")
-# print(res)
-# res= profile_inference(trainset, pruned_model, "pruned")
-# print(res)
+print("PRUNED MODEL")
+pruned_model = AdaptiveCifar10CNN()
+pruned_model._prune(0.5)
+print("TRAIN")
+res = profile_train(trainset=trainset, model=pruned_model, epochs=epochs, name="pruned")
+print(res)
+print("INFERENCE")
+res= profile_inference(trainset, pruned_model, "pruned")
+print(res)
 
 # QAT
-# quantized_model = AdaptiveCifar10CNN()
-# quantized_model._qat(dataset=trainset, q_epochs=10)
-
-# res= profile_inference(trainset, quantized_model, "quantized")
-# print(res)
+print("QUANTIZED MODEL (QAT)")
+start_t = time.time()
+quantized_model = AdaptiveCifar10CNN()
+quantized_model._qat(dataset=trainset, q_epochs=10)
+print(f"Time: {time.time() - start_t}")
+print("INFERENCE")
+res= profile_inference(trainset, quantized_model, "quantized")
+print(res)
 
 # # PTQ
+# print("QUANTIZED MODEL (PTQ)")
 # quantized_model = AdaptiveCifar10CNN()
+# print("Train")
 # res = profile_train(trainset=trainset, model=quantized_model, epochs=epochs, name="quantized")
 # print(res)
+# print("INFERENCE")
+# quantized_model.cpu()
 # quantized_model._ptq(calibration_data=trainset)
 # res= profile_inference(trainset, quantized_model, "quantized")
 # print(res)
 
-
+print("LOW RANK MODEL")
 low_rank_model = AdaptiveCifar10CNN()
 low_rank_model._low_rank()
+print("TRAIN")
 res = profile_train(trainset=trainset, model=low_rank_model, epochs=epochs, name="low_rank")
 print(res)
+print("INFERENCE")
 res =profile_inference(trainset, low_rank_model, "low_rank")
 print(res)
 

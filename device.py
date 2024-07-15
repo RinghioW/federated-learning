@@ -114,7 +114,10 @@ class Device():
         # TODO: In case of quantization, we need to train the model for a few epochs
         if quantize:
             self.quantized = True
-            net._qat(self.dataset, q_epochs=5)
+            # Train the model for q_epochs
+            to_tensor = transforms.ToTensor()
+            dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+            net._qat(dataset, q_epochs=5)
         else:
             net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank)
         self.instantiated_model = net
