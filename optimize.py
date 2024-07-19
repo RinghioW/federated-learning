@@ -24,10 +24,9 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
         data_imbalances = np.array([_data_imbalance(c) for c in cluster_distributions_post_shuffle])
         latencies = np.array(_latencies(uplinks, downlinks, computes, transition_matrices, cluster_distributions, cluster_distributions_post_shuffle))
 
-
         data_imbalance = np.mean(data_imbalances) * adaptive_scaling_factor
         system_latency = np.amax(latencies)
-        obj_func = (1.+system_latency) * (1.+data_imbalance)
+        obj_func = (1.+system_latency) * (1.+data_imbalance*adaptive_scaling_factor)
         # logger.u_log_optimization(id, obj_func, system_latency, data_imbalance)
 
         return obj_func
@@ -36,6 +35,7 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
     result = minimize(objective,
                         x0=np.random.rand(n_devices, n_clusters, n_devices).flatten(),
                         method='SLSQP',
+                        options={'maxiter': 50},
                         bounds=[(0.,1.)] * (n_devices * n_clusters * n_devices),
                         )
     if not result.success:

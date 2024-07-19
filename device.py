@@ -27,25 +27,19 @@ RASPBERRY_PI_4_CONFIG = {
     'memory': 4, # GB
 }
 
-NUM_CLASSES = 10
+NUM_CLASSES = 100
 
 
 class Device():
-    def __init__(self, id, dataset=None, valset=None) -> None:
+    def __init__(self, id, trainset, valset) -> None:
         self.id = id
-        self.config = Device.generate_config(id)
-
-        self.dataset = dataset
+        self.config = self.generate_config()
+        self.dataset = trainset
         self.valset = valset
 
-        self.model = None # Model class (NOT instance)
-        self.model_params = None
-
+        self.model = None
         self.clusters = None # Clustered labels
 
-        
-        self.instantiated_model = None
-        self.quantized = False
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
@@ -54,14 +48,9 @@ class Device():
     def train(self, epochs):
         if len(self.dataset) == 0:
             return
-
-
-        # If the model was quantized, training already happened. So let's just freeze it
-        if self.quantized:
-            return
         
         # Load the model
-        net = self.instantiated_model
+        net = self.model
         if torch.cuda.is_available():
             net = net.to(DEVICE)
 
@@ -78,16 +67,12 @@ class Device():
 
         for _ in range(epochs):
             for batch in trainloader:
-                images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+                images, labels = batch["img"].to(DEVICE), batch["fine_label"].to(DEVICE)
                 optimizer.zero_grad()
                 outputs = net(images)
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
-
-        
-        # Save the model
-        self.instantiated_model = net
     
     # Function to sample a sub-dataset from the dataset
     def sample(self, percentage):
@@ -106,26 +91,11 @@ class Device():
     def cluster_distribution(self):
         return np.bincount(self.clusters, minlength=NUM_CLASSES)
 
-    def adapt(self, model, state_dict, params):
-        net = model()
-        quantize = params["quantize"]
-        pruning_factor = params["pruning_factor"]
-        low_rank = params["low_rank"]
-        # TODO: In case of quantization, we need to train the model for a few epochs
-        if quantize:
-            self.quantized = True
-            # Train the model for q_epochs
-            to_tensor = transforms.ToTensor()
-            dataset = self.dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-            net._qat(dataset, q_epochs=5)
-        else:
-            net.adapt(state_dict, pruning_factor=pruning_factor, quantize=quantize, low_rank=low_rank)
-        self.instantiated_model = net
 
     def validate(self):
         if self.valset is None:
             return 0.
-        net = self.instantiated_model
+        net = self.model
         net.eval()
         to_tensor = transforms.ToTensor()
         dataset = self.valset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
@@ -133,7 +103,7 @@ class Device():
         correct, total = 0, 0
         with torch.no_grad():
             for batch in valloader:
-                images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+                images, labels = batch["img"].to(DEVICE), batch["fine_label"].to(DEVICE)
                 outputs = net(images)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
@@ -147,10 +117,9 @@ class Device():
     # Meaning that data imbalance will not be accounted for
     # And devices will not share data with each other
     @staticmethod
-    def generate_config(id):
+    def generate_config():
         # TODO : Don't generate randomly but use the specs of actual devices
-        return {"id" : id,
-                "compute" : 1. + np.random.rand(), # Compute capability in FLOPS
+        return {"compute" : 1. + np.random.rand(), # Compute capability in FLOPS
                 "memory" : 1. + np.random.rand(), # Memory capability in Bytes
                 "uplink_rate" : 1. + np.random.rand(), # Uplink rate in Bps
                 "downlink_rate" : 1. + np.random.rand() # Downlink rate in Bps
@@ -168,11 +137,10 @@ class Device():
     def computation_time(self):
         return self.config["compute"]*len(self.dataset)
     
-    
     def data_imbalance(self):
         if len(self.dataset) == 0:
             return np.float64(0.)
-        distribution = np.bincount(self.dataset["label"], minlength=10)
+        distribution = np.bincount(self.dataset["fine_label"], minlength=100)
         n_samples = sum(distribution)
         if n_samples == 0:
             return np.float64(0.)
@@ -181,3 +149,6 @@ class Device():
         balanced_distribution = [avg_samples] * n_classes
         js = jensenshannon(balanced_distribution, distribution)
         return js
+    
+    def assign_model(self, model):
+        self.model = model

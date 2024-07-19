@@ -1,13 +1,13 @@
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import DirichletPartitioner
 
-def load_datasets(num_clients):
+def load_datasets(num_clients, name, label_name="fine_label"):
     fds = FederatedDataset(
-        dataset="cifar10",
+        dataset=name,
         partitioners={
             "train": DirichletPartitioner(
                 num_partitions=num_clients,
-                partition_by="label",
+                partition_by=label_name,
                 alpha=0.3,
                 seed=42,
                 min_partition_size=0,
@@ -25,9 +25,9 @@ def load_datasets(num_clients):
     testset = fds.load_split("test")
     return trainsets, valsets, testset
 
-def load_iid_datasets(num_clients):
+def load_iid_datasets(num_clients, name):
     fds = FederatedDataset(
-        dataset="cifar10",
+        dataset=name,
         partitioners={
             "train": num_clients
         },

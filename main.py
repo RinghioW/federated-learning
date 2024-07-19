@@ -4,8 +4,13 @@ from user import User
 from server import Server
 from log import Logger
 import os
+from copy import deepcopy
+from data.data import load_datasets
+import torchvision
 import nets
-from data.cifar10 import load_datasets
+
+LABEL_NAME = "fine_label"
+NUM_CLASSES = 100
 def main():
     
     # Define arguments
@@ -32,15 +37,34 @@ def main():
         logger = Logger(log_dir="results")
 
     # Load dataset and split it according to the number of devices
-    trainsets, valsets, testset = load_datasets(num_devices)
+    dataset = "cifar100"
+    num_classes = 100
+    trainsets, valsets, testset = load_datasets(num_devices, dataset)
 
+    server_model = nets.LargeCifar100CNN()
+    # Generate configs for devices
+    devices = [Device(id=i,
+                       trainset=trainsets.pop(),
+                       valset=valsets.pop())
+                for i in range(num_devices)]
 
-    devices_per_user = num_devices // num_users
-    users = [User(id=i, 
-                  devices=[Device(j+(devices_per_user*i), trainsets.pop(), valsets.pop()) for j in range(devices_per_user)],
+    # Order devices by resources
+    devices_by_resource = sorted(devices, key=lambda d: d.resources())
+    large_model = nets.MediumCifar100CNN()
+    small_model = nets.SmallCifar100CNN()
+    # The top half of devices are given a large model, and the bottom half are given a small model
+    # TODO: This should be done at the user level (probably)
+    for i, device in enumerate(devices_by_resource):
+        if i < num_devices // 2:
+            device.model = deepcopy(small_model)
+        else:
+            device.model = deepcopy(large_model)
+
+    users = [User(id=i,
+                  devices=[devices.pop() for _ in range(num_devices // num_users)],
                   testset=testset) for i in range(num_users)]
 
-    server = Server(nets.AdaptiveCifar10CNN, users, logger)
+    server = Server(model=server_model, users=users, logger=logger, num_classes=num_classes)
 
     # Evaluate the server model before training
     initial_loss, initial_accuracy = server.test(testset)
@@ -54,22 +78,13 @@ def main():
         print("Epoch", epoch)
         # Server aggregates the updates from the users
         # ShuffleFL step 18, 19
-        if no_adaptation:
-            server.train_no_adaptation_no_shuffle()
-        else:
-            server.train()
+        server.train()
 
         # Server evaluates the model
         loss, accuracy = server.test(testset)
-
-
         print(f"S, e{epoch} - Loss: {loss: .4f}, Accuracy: {accuracy: .3f}")
 
     logger.dump()
-
-
-    # Run without adaptation and shuffling
-
 
 
 if __name__ == "__main__":

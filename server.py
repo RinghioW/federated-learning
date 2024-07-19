@@ -3,12 +3,12 @@ import torchvision
 from statistics import fmean
 import time
 
+import torchvision.models.mobilenetv3
+from copy import deepcopy
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Server():
-    def __init__(self, model, users, logger, dataset="cifar10"):
+    def __init__(self, model, users, logger, num_classes):
         self.model = model
-        torch.save({'model_state_dict': model().state_dict()}, "checkpoints/server.pt")
-        self.dataset = dataset
         self.users = users
         self.wall_clock_training_times = [0.] * len(users)
         self.scaling_factor = 0.5
@@ -20,23 +20,21 @@ class Server():
     # Step 18 in the ShuffleFL algorithm
     def _aggregate_updates(self):
         # Load the first user model
-        state_dicts = [torch.load(f"checkpoints/user_{i}.pt")['model_state_dict'] for i in range(len(self.users))]
+        state_dicts = [user.model.state_dict() for user in self.users]
         n_samples = [user.n_samples() for user in self.users]
         total_samples = sum(n_samples)
         avg_state_dict = {}
         for key in state_dicts[0].keys():
             avg_state_dict[key] = sum([state_dict[key] * n_samples[i] for i, state_dict in enumerate(state_dicts)]) / total_samples
-        # Save the aggregated weights
-        torch.save({'model_state_dict': avg_state_dict}, "checkpoints/server.pt")
+        # Update model
+        self.model.load_state_dict(avg_state_dict)
 
     # Evaluate the server model on the test set
     def test(self, testset):
         to_tensor = torchvision.transforms.ToTensor()
         testset = testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
         testloader = torch.utils.data.DataLoader(testset, batch_size=32, num_workers=3)
-        net = self.model()
-        checkpoint = torch.load("checkpoints/server.pt")
-        net.load_state_dict(checkpoint['model_state_dict'])
+        net = self.model
         if torch.cuda.is_available():
             net = net.to(DEVICE)
         net.eval()
@@ -46,7 +44,7 @@ class Server():
         correct, total, loss = 0, 0, 0.0
         with torch.no_grad():
             for batch in testloader:
-                images, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+                images, labels = batch["img"].to(DEVICE), batch["fine_label"].to(DEVICE)
                 outputs = net(images)
                 loss += criterion(outputs, labels).item()
                 _, predicted = torch.max(outputs.data, 1)
@@ -74,10 +72,9 @@ class Server():
     def _select_users(self):
         # TODO: Select users
         pass
-
         for user in self.users:
-            user.model = self.model
             user.logger = self.logger
+            user.model = deepcopy(self.model)
 
 
     def _poll_users(self, kd_epochs, on_device_epochs):
@@ -87,7 +84,7 @@ class Server():
             initial_time = time.time()
             user.train(kd_epochs, on_device_epochs)
             self.wall_clock_training_times[user_id] = time.time() - initial_time
-            self.logger.u_log_test(user_id, user.validate())
+            self.logger.u_log_test(user_id, user.test())
 
     def train(self):
         print("SERVER: Selecting users")
@@ -139,7 +136,7 @@ class Server():
             initial_time = time.time()
             user.train_no_adaptation_no_shuffle(on_device_epochs)
             self.wall_clock_training_times[user_id] = time.time() - initial_time
-            user.logger.u_log_test(user_id, user.validate())
+            user.logger.u_log_test(user_id, user.test())
 
     def _aggregate_updates_no_adaptation_no_shuffle(self):
         # Load the first user model
