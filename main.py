@@ -4,7 +4,7 @@ from user import User
 from server import Server
 import os
 from copy import deepcopy
-from data.data import load_datasets
+from data import load_datasets
 import nets
 
 LABEL_NAME = "fine_label"
