@@ -1,76 +1,34 @@
 import torch
-import numpy as np
-import math
-import torchvision
 import datasets
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.cluster import KMeans
-from optimize import optimize_transmission_matrices
-from shuffle import shuffle_data
-from statistics import fmean
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-NUM_CLASSES = 100
+from config import DEVICE, LABEL_NAME
 
 class User():
     def __init__(self, id, devices, testset) -> None:
         self.id = id
         self.devices = devices
-        self.kd_dataset: datasets.Dataset = None
         self.model = None
 
-        # SHUFFLE-FL
-
-        # Transition matrix of ShuffleFL of size (floor{number of classes * shrinkage ratio}, number of devices + 1)
-        # The additional column is for the kd_dataset
-        # Also used by equation 7 as the optimization variable for the argmin
-        # Shrinkage ratio for reducing the classes in the transition matrix
-        self.shrinkage_ratio = 0.1
-
-        # System latencies for each device
-        self.adaptive_scaling_factor = 1.0
-
-        # Staleness factor
-        self.staleness_factor = 0.0
-
-        # Average capability beta
-        self.average_power = 1.
-        self.average_bandwidth = 1.
-        self.n_transferred_samples = 0
-
-        self.init = False
         self.testset = testset
-        self.training_losses = []
-        self.training_accuracies = []
-        self.test_accuracies = []
-
-        self.logger = None
-
-
-    def __repr__(self) -> str:
-        return f"User(id: {self.id}, devices: {self.devices})"
+        self.kd_dataset = None
 
     
-    # Train the user model using knowledge distillation
     def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
-        student = self.model
-
-        if torch.cuda.is_available():
-            student = student.to(DEVICE)
+        
+        # Train server model on the dataset using kd
+        student = self.model.to(DEVICE)
         student.train()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
         # TODO : Test 2 options
-        # option 1 -> each device acts as a teacher separately
-        # option 2 -> average the teacher logits from all devices
+        # option 1 -> each device acts as a teacher separately (takes more time)
+        # option 2 -> average the teacher logits from all devices (can be done in parallel)
         teachers = [] 
         for device in self.devices:
             teacher = device.model.to(DEVICE)
             teacher.eval()
             teachers.append(teacher)
         
-        to_tensor = torchvision.transforms.ToTensor()
-        train_loader = torch.utils.data.DataLoader(self.kd_dataset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"), shuffle=True, drop_last=True, batch_size=32, num_workers=3)
+        train_loader = torch.utils.data.DataLoader(self.kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
         
         running_loss = 0.0
@@ -80,7 +38,7 @@ class User():
         for _ in range(epochs):
 
             for batch in train_loader:
-                inputs, labels = batch["img"].to(DEVICE), batch["fine_label"].to(DEVICE)
+                inputs, labels = batch["img"].to(DEVICE), batch[LABEL_NAME].to(DEVICE)
 
                 optimizer.zero_grad()
 
@@ -115,135 +73,39 @@ class User():
                 running_kd_loss += soft_targets_loss.item()
                 running_ce_loss += label_loss.item()
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
-        self.logger.u_log_train(self.id, running_kd_loss / len(train_loader.dataset), running_ce_loss / len(train_loader.dataset), running_accuracy / len(train_loader.dataset))
-        
+
+    def create_kd_dataset(self):
+        # Sample a dataset from the devices
+        percentages = [1 / len(self.devices) for _ in range(len(self.devices))]
+        kd_dataset = self._sample_devices(percentages)
+        self.kd_dataset = kd_dataset
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
     def train(self, kd_epochs, on_device_epochs):
-        # Log device configs
-        self.logger.u_log_configs(self.id,[d.config for d in self.devices])
 
-        print(f"USER {self.id}: Shuffling")
-        # Shuffle according to ShuffleFL
-        n_transferred_samples = self._shuffle()
-        self.n_transferred_samples = n_transferred_samples
+        # TODO : Adapt model to the devices (KD on the same dataset)
+        if self.kd_dataset is not None:
+            for device in self.devices:
+                device.update_model(self.model, self.kd_dataset)
 
-        print(f"USER {self.id}: Training devices")
-        # Train the devices
         for device in self.devices:
-            print(f"DEVICE {device.id}: Training")
             device.train(on_device_epochs)
         
-        self.logger.u_log_devices_test(self.id, [device.validate() for device in self.devices])
-        self.logger.u_log_latencies(self.id, [device.computation_time() for device in self.devices])
-        self.logger.u_log_memories(self.id, [device.memory_usage() for device in self.devices])
-        self.logger.u_log_data_imbalances(self.id, [device.data_imbalance() for device in self.devices])
-        # Create the knowledge distillation dataset
-        self._create_kd_dataset()
-
-        print(f"USER {self.id}: Aggregating updates")
-
-        # Aggregate the updates
+        self.create_kd_dataset()
         self._aggregate_updates(epochs=kd_epochs)
 
+        self.test()
 
-    # Implements section 4.4 from ShuffleFL
-    def _reduce_dimensionality(self):
-        lda_estimator, kmeans_estimator = self._compute_centroids()
-        for device in self.devices:
-            device = device.cluster(lda_estimator, kmeans_estimator)
-
-    def _shuffle(self):
-        # Reduce dimensionality of the transmission matrices
-        # ShuffleFL step 7, 8
-        self._reduce_dimensionality()
-
-        # User optimizes the transmission matrices
-        # ShuffleFL step 9
-        adaptive_scaling_factor = self.adaptive_scaling_factor
-        cluster_distributions = [device.cluster_distribution() for device in self.devices]
-        uplinks = [device.config["uplink_rate"] for device in self.devices]
-        downlinks = [device.config["downlink_rate"] for device in self.devices]
-        computes = [device.config["compute"] for device in self.devices]
-        transition_matrices = optimize_transmission_matrices(adaptive_scaling_factor, cluster_distributions, uplinks, downlinks, computes, self.logger, self.id)
-
-        # Shuffle the data and update the transition matrices
-        # Implements Equation 1 from ShuffleFL
-        datasets = [device.dataset for device in self.devices]
-        clusters = [device.clusters for device in self.devices]
-        res_datasets, n_transferred_samples = shuffle_data(datasets, clusters, cluster_distributions, transition_matrices)
-
-        # Update average capability
-        # Update the devices with the new datasets
-        for device, dataset in zip(self.devices, res_datasets):
-            device.dataset = dataset
-        
-
-        return n_transferred_samples
-
-    # Compute the difference in capability of the user compared to last round
-    # Implements Equation 8 from ShuffleFL 
-    def diff_capability(self):
-        if not self.init:
-            return 1.0
-        # Compute current average power and bandwidth and full dataset size
-        avg_power = fmean([device.config["compute"] for device in self.devices])
-        avg_bandwidth = fmean([fmean([device.config["uplink_rate"], device.config["downlink_rate"]]) for device in self.devices])
-        
-        # Equation 8 in ShuffleFL
-        staleness_factor = self._staleness_factor()
-        prev_avg_power = self.average_power
-        prev_avg_bandwidth = self.average_bandwidth
-
-        diff_capability = fmean(data=[avg_power/prev_avg_power, avg_bandwidth/prev_avg_bandwidth], weights=[staleness_factor, 1-staleness_factor])
-        
-        # Update the average power and bandwidth
-        self.average_power = avg_power
-        self.average_bandwidth = avg_bandwidth
-
-        return diff_capability
-    
-    # Implements Equation 9 from ShuffleFL
-    def _staleness_factor(self):
-        dataset_size = sum([len(device.dataset) for device in self.devices])
-        data_processed = 3 * dataset_size
-
-        # Compute the staleness factor
-        return data_processed / (data_processed + self.n_transferred_samples)
-    
-    def _create_kd_dataset(self):
-        percentages = self._uplink_percentages()
-        self.kd_dataset = self._sample_devices(percentages)
-    
-    def _uplink_percentages(self):
-        # Sample based on the uplink rate of the devices
-        uplinks = [device.config["uplink_rate"] for device in self.devices]
-        s = sum(uplinks)
-        percentages = [uplink / s for uplink in uplinks]
-        return percentages
-
-    def _compute_centroids(self):
-        # Sample based on the uplink rate of the devices
-        percentages = self._uplink_percentages()
-        dataset = self._sample_devices(percentages)
-        features = np.array(dataset["img"]).reshape(len(dataset), -1)
-        labels = np.array(dataset["fine_label"])
-
-        lda = LinearDiscriminantAnalysis(n_components=4).fit(features, labels)
-        feature_space = lda.transform(features)
-        # Cluster datapoints to k classes using KMeans
-        n_clusters = math.floor(self.shrinkage_ratio*NUM_CLASSES)
-        kmeans = KMeans(n_clusters=n_clusters).fit(feature_space)
-
-        return lda, kmeans
     
     def _sample_devices(self, percentages):
         # Assemble the entire dataset from the devices
-        dataset = []
+        dataset = None
         for device, percentage in zip(self.devices, percentages):
-            dataset.extend(device.sample(percentage))
-        return datasets.Dataset.from_list(dataset)
+            if dataset is None:
+                dataset = device.sample(percentage)
+            dataset = datasets.concatenate_datasets([dataset, device.sample(percentage)])
+        return dataset
 
     def n_samples(self):
         return len(self.kd_dataset)
@@ -251,14 +113,12 @@ class User():
     def test(self):
         net = self.model
         net.eval()
-        to_tensor = torchvision.transforms.ToTensor()
-        dataset = self.testset.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
-        testloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=False, num_workers=3)
+        testloader = torch.utils.data.DataLoader(self.testset, batch_size=32, shuffle=False, num_workers=3)
         correct, total = 0, 0
         with torch.no_grad():
             for batch in testloader:
-                images, labels = batch["img"].to(DEVICE), batch["fine_label"].to(DEVICE)
+                images, labels = batch["img"].to(DEVICE), batch[LABEL_NAME].to(DEVICE)
                 outputs = net(images)
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
-        return correct / total
+        print(f"USER {self.id} test accuracy: {correct / total}")
