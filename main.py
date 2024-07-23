@@ -5,7 +5,7 @@ from server import Server
 from log import Logger
 import os
 import nets
-from data.cifar10 import load_datasets
+from data import load_datasets
 def main():
     
     # Define arguments

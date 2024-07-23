@@ -1,20 +1,22 @@
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import DirichletPartitioner
-
-def load_datasets(num_clients):
-    num_clients = num_clients
+from torchvision.transforms import ToTensor
+def load_datasets(num_clients, name, label_name="fine_label"):
+    to_tensor = ToTensor()
     fds = FederatedDataset(
-        dataset="cifar10",
+        dataset=name,
         partitioners={
             "train": DirichletPartitioner(
                 num_partitions=num_clients,
-                partition_by="label",
+                partition_by=label_name,
                 alpha=0.3,
                 seed=42,
                 min_partition_size=0,
             ),
         },
+        preprocessor=lambda ds: ds.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"),
     )
+
     # Create train/val for each partition and wrap it into DataLoader
     trainsets = []
     valsets = []
@@ -25,4 +27,3 @@ def load_datasets(num_clients):
         valsets.append(partition["test"])
     testset = fds.load_split("test")
     return trainsets, valsets, testset
-
