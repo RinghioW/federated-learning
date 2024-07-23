@@ -30,7 +30,7 @@ def main():
     dataset = "cifar100"
     trainsets, valsets, testset = load_datasets(num_devices, dataset)
 
-    server_model = nets.LargeCifar100CNN()
+    server_model = nets.LargeCifar100CNN
     # Generate configs for devices
     devices = [Device(id=i,
                        trainset=trainsets.pop(),

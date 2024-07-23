@@ -12,10 +12,11 @@ class User():
         self.kd_dataset = None
 
     
-    def _aggregate_updates(self, epochs, learning_rate=0.0001, T=2, soft_target_loss_weight=0.25, ce_loss_weight=0.75):
+    def _aggregate_updates(self, epochs, learning_rate=0.001, T=2, soft_target_loss_weight=0.4, ce_loss_weight=0.6):
         
         # Train server model on the dataset using kd
-        student = self.model.to(DEVICE)
+        student = self.model().to(DEVICE)
+        student.load_state_dict(torch.load("checkpoints/server.pth"))
         student.train()
         optimizer = torch.optim.Adam(student.parameters(), lr=learning_rate)
 
@@ -73,6 +74,7 @@ class User():
                 running_kd_loss += soft_targets_loss.item()
                 running_ce_loss += label_loss.item()
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
+        torch.save(student.state_dict(), f"checkpoints/user_{self.id}.pth")
 
     def create_kd_dataset(self):
         # Sample a dataset from the devices
@@ -111,7 +113,8 @@ class User():
         return len(self.kd_dataset)
 
     def test(self):
-        net = self.model
+        net = self.model().to(DEVICE)
+        net.load_state_dict(torch.load(f"checkpoints/user_{self.id}.pth"))
         net.eval()
         testloader = torch.utils.data.DataLoader(self.testset, batch_size=32, shuffle=False, num_workers=3)
         correct, total = 0, 0

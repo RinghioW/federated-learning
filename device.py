@@ -19,12 +19,17 @@ class Device():
         return datasets.Dataset.shuffle(self.dataset).select([i for i in range(amount)])
     
     def update_model(self, user_model, kd_dataset):
-        
+        # Use knowledge distillation to adapt the model to the device
         # Train server model on the dataset using kd
         student = self.model.to(DEVICE)
         student.train()
         optimizer = torch.optim.Adam(student.parameters(), lr=0.001)
-        teacher = user_model.to(DEVICE)
+
+        # TODO : Test 2 options
+        # option 1 -> each device acts as a teacher separately (takes more time)
+        # option 2 -> average the teacher logits from all devices (can be done in parallel)
+        teacher = user_model().to(DEVICE)
+        teacher.load_state_dict(torch.load("checkpoints/server.pth"))
         teacher.eval()
         
         train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=3)
@@ -35,9 +40,6 @@ class Device():
         running_ce_loss = 0.0
         running_accuracy = 0.0
         epochs = 10
-        T = 2
-        soft_target_loss_weight = 0.75 # Priority on trasferring the knowledge
-        ce_loss_weight = 0.25 # No priority on learning the labels
         for _ in range(epochs):
 
             for batch in train_loader:
@@ -52,7 +54,7 @@ class Device():
 
                 # Forward pass with the student model
                 student_logits = student(inputs)
-
+                T = 2
                 soft_targets = torch.nn.functional.softmax(teacher_logits / T, dim=-1)
                 soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
 
@@ -63,6 +65,8 @@ class Device():
                 label_loss = ce_loss(student_logits, labels)
 
                 # Weighted sum of the two losses
+                soft_target_loss_weight = 0.8
+                ce_loss_weight = 0.2
                 loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
 
                 loss.backward()
@@ -83,7 +87,7 @@ class Device():
         net = self.model.to(DEVICE)
         net.train()
 
-        optimizer = torch.optim.Adam(net.parameters(), lr=0.0001)
+        optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
 
         trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=32, shuffle=True, drop_last=True, num_workers=3)
         criterion = torch.nn.CrossEntropyLoss()

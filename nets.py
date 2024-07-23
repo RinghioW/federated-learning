@@ -1,5 +1,13 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.utils.prune as prune
+
+def prune_model(model, parameters, percentage):
+    prune.global_unstructured(parameters=parameters, pruning_method=prune.L1Unstructured, amount=percentage)
+    # Make sure to remove the pruned tensors
+    for module, _ in parameters:
+        model = prune.remove(module, 'weight')
+    return model
 
 class LargeCifar100CNN(nn.Module):
     def __init__(self):
@@ -30,6 +38,7 @@ class LargeCifar100CNN(nn.Module):
         x = self.fc2(x)
         return x
 
+        
 class MediumCifar100CNN(nn.Module):
     def __init__(self):
         super(MediumCifar100CNN, self).__init__()
