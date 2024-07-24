@@ -11,6 +11,8 @@ class Device():
 
         self.model = None
 
+        self.log = []
+
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
     
@@ -121,4 +123,16 @@ class Device():
     def update(self, trainset, valset):
         self.dataset = trainset
         self.valset = valset
+
+    def flush(self):
+        with open(f"results/device_{self.id}.log", "w") as f:
+            for line in self.log:
+                f.write(f"{line}\n")
     
+        import matplotlib.pyplot as plt
+        plt.plot(self.log)
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.title(f"Device {self.id} Validation Accuracy")
+        plt.savefig(f"results/device_{self.id}.svg")
+        plt.close()

@@ -1,11 +1,13 @@
 import torch
 from config import DEVICE
+
 class Server():
     def __init__(self, model, users, testset) -> None:
         self.model = model
         torch.save(self.model().state_dict(), "checkpoints/server.pth")
         self.users = users
         self.testset = testset
+        self.log = []
 
     # Aggregate the updates from the users
     # In this case, averaging the weights will be sufficient
@@ -41,6 +43,7 @@ class Server():
         loss /= len(testloader.dataset)
         accuracy = correct / total
         print(f"SERVER Test Accuracy: {accuracy}")
+        self.log.append(accuracy)
 
     def _poll_users(self, kd_epochs, on_device_epochs):
         for user in self.users:
@@ -58,3 +61,15 @@ class Server():
 
         # Aggregate the updates from the users
         self._aggregate_updates()
+
+    def flush(self):
+        with open("results/server.log", "w") as f:
+            for accuracy in self.log:
+                f.write(f"{accuracy}\n")
+        import matplotlib.pyplot as plt
+        plt.plot(self.log)
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.title("Server Test Accuracy")
+        plt.savefig("results/server.svg")
+        plt.close()

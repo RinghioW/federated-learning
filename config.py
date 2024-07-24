@@ -1,6 +1,7 @@
 import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DATASET = "cifar100"
 LABEL_NAME = "fine_label"
 NUM_CLASSES = 100
 

@@ -10,8 +10,6 @@ def load_datasets(num_clients, name, label_name="fine_label"):
                 num_partitions=num_clients,
                 partition_by=label_name,
                 alpha=0.3,
-                seed=42,
-                min_partition_size=0,
             ),
         },
         preprocessor=lambda ds: ds.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch"),

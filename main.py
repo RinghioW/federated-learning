@@ -3,12 +3,10 @@ from device import Device
 from user import User
 from server import Server
 import os
-from copy import deepcopy
 from data import load_datasets
+from config import DATASET
 import nets
 
-LABEL_NAME = "fine_label"
-NUM_CLASSES = 100
 def main():
     
     # Define arguments
@@ -27,8 +25,7 @@ def main():
     os.makedirs("results", exist_ok=True)
 
     # Load dataset and split it according to the number of devices
-    dataset = "cifar100"
-    trainsets, valsets, testset = load_datasets(num_devices, dataset)
+    trainsets, valsets, testset = load_datasets(num_devices, DATASET)
 
     server_model = nets.LargeCifar100CNN
     # Generate configs for devices
@@ -38,18 +35,18 @@ def main():
                 for i in range(num_devices)]
 
     # Order devices by resources
-    large_model = nets.MediumCifar100CNN()
-    small_model = nets.SmallCifar100CNN()
+    large_model = nets.MediumCifar100CNN
+    small_model = nets.SmallCifar100CNN
     # The top half of devices are given a large model, and the bottom half are given a small model
     # TODO: This should be done at the user level (probably)
     for i, device in enumerate(devices):
         if i < num_devices // 2:
-            device.model = deepcopy(small_model)
+            device.model = small_model()
         else:
-            device.model = deepcopy(large_model)
+            device.model = large_model()
 
     users = [User(id=i,
-                  devices=[devices.pop() for _ in range(num_devices // num_users)],
+                  devices=[devices.pop(0) for _ in range(num_devices // num_users)],
                   testset=testset) for i in range(num_users)]
 
     server = Server(model=server_model, users=users, testset=testset)
@@ -70,7 +67,13 @@ def main():
         # Server evaluates the model
         server.test()
 
-
+    # Save the results
+    server.flush()
+    for user in users:
+        user.flush()
+        for device in user.devices:
+            device.flush()
+    
 
 if __name__ == "__main__":
     main()

@@ -10,6 +10,8 @@ class User():
 
         self.testset = testset
         self.kd_dataset = None
+        
+        self.log = []
 
     
     def _aggregate_updates(self, epochs, learning_rate=0.001, T=2, soft_target_loss_weight=0.4, ce_loss_weight=0.6):
@@ -125,3 +127,16 @@ class User():
                 correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
                 total += labels.size(0)
         print(f"USER {self.id} test accuracy: {correct / total}")
+        self.log.append(correct / total)
+    
+    def flush(self):
+        with open(f"results/user_{self.id}.log", "w") as f:
+            for accuracy in self.log:
+                f.write(f"{accuracy}\n")
+
+        import matplotlib.pyplot as plt
+        plt.plot(self.log)
+        plt.xlabel("Epoch")
+        plt.ylabel("Accuracy")
+        plt.savefig(f"results/user_{self.id}.svg")
+        plt.close()
