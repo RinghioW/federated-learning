@@ -46,7 +46,7 @@ class LargeCifar100CNN(nn.Module):
 
 class MediumCifar100CNN(nn.Module):
     def __init__(self):
-        super(LargeCifar100CNN, self).__init__()
+        super(MediumCifar100CNN, self).__init__()
         self.conv1 = nn.Conv2d(3, 32, 3, 1, padding=1)
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 64, 3, 1, padding=1)
@@ -76,7 +76,7 @@ class MediumCifar100CNN(nn.Module):
         
 class SmallCifar100CNN(nn.Module):
     def __init__(self):
-        super(MediumCifar100CNN, self).__init__()
+        super(SmallCifar100CNN, self).__init__()
         self.conv1 = nn.Conv2d(3, 32, 3, 1, padding=1)
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 64, 3, 1, padding=1)

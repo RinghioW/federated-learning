@@ -78,6 +78,7 @@ class Device():
                 running_kd_loss += soft_targets_loss.item()
                 running_ce_loss += label_loss.item()
                 running_accuracy += (torch.max(student_logits, 1)[1] == labels).sum().item()
+        self.log.append(running_accuracy / len(train_loader))
 
     # Perform on-device learning on the local dataset. This is simply a few rounds of SGD.
     def train(self, epochs):
