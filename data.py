@@ -1,6 +1,7 @@
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import DirichletPartitioner
 from torchvision.transforms import ToTensor
+import datasets
 def load_datasets(num_clients, name, label_name="fine_label"):
     to_tensor = ToTensor()
     fds = FederatedDataset(
@@ -25,3 +26,10 @@ def load_datasets(num_clients, name, label_name="fine_label"):
         valsets.append(partition["test"])
     testset = fds.load_split("test")
     return trainsets, valsets, testset
+
+
+def load_cifar10():
+    to_tensor = ToTensor()
+    cifar10 = datasets.load_dataset("cifar10")
+    cifar10 = cifar10.map(lambda img: {"img": to_tensor(img)}, input_columns="img").with_format("torch")
+    return cifar10

@@ -3,13 +3,13 @@ import datasets
 from config import DEVICE, LABEL_NAME
 
 class User():
-    def __init__(self, id, devices, testset) -> None:
+    def __init__(self, id, devices, testset, kd_dataset) -> None:
         self.id = id
         self.devices = devices
         self.model = None
 
         self.testset = testset
-        self.kd_dataset = None
+        self.kd_dataset = kd_dataset
         
         self.log = []
 
@@ -80,9 +80,7 @@ class User():
 
     def create_kd_dataset(self):
         # Sample a dataset from the devices
-        percentages = [1 / len(self.devices) for _ in range(len(self.devices))]
-        kd_dataset = self._sample_devices(percentages)
-        self.kd_dataset = kd_dataset
+        pass
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm

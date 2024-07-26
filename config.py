@@ -24,3 +24,17 @@ RASPBERRY_PI_4_CONFIG = {
     'compute' : 9.69, # GFLOPS
     'memory': 4, # GB
 }
+
+def train_cifar10(model, cifar10):
+    dataloader = torch.utils.data.DataLoader(cifar10, batch_size=32, shuffle=True, num_workers=3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    criterion = torch.nn.CrossEntropyLoss()
+    model.train()
+    for epoch in range(15):
+        for batch in dataloader:
+            optimizer.zero_grad()
+            inputs, labels = batch["img"].to(DEVICE), batch["label"].to(DEVICE)
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()

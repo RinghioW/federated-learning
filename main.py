@@ -3,8 +3,8 @@ from device import Device
 from user import User
 from server import Server
 import os
-from data import load_datasets
-from config import DATASET
+from data import load_datasets, load_cifar10
+from config import DATASET, train_cifar10
 import nets
 
 def main():
@@ -27,6 +27,8 @@ def main():
     # Load dataset and split it according to the number of devices
     trainsets, valsets, testset = load_datasets(num_devices, DATASET)
 
+
+    # Create models and train them all on the public dataset
     server_model = nets.LargeCifar100CNN
     # Generate configs for devices
     devices = [Device(id=i,
@@ -45,9 +47,21 @@ def main():
         else:
             device.model = large_model()
 
+    # Train all devices on CIFAR10
+
+    # Load public dataset
+    print("Loading CIFAR10")
+    cifar10 = load_cifar10()
+    print("Training on CIFAR10")
+    for device in devices:
+        train_cifar10(device.model, cifar10)
+    train_cifar10(server_model, cifar10)
+    print("Starting FL")
+    
     users = [User(id=i,
                   devices=[devices.pop(0) for _ in range(num_devices // num_users)],
-                  testset=testset) for i in range(num_users)]
+                  testset=testset,
+                  kd_dataset=cifar10) for i in range(num_users)]
 
     server = Server(model=server_model, users=users, testset=testset)
 
