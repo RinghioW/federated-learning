@@ -4,7 +4,6 @@ from config import DEVICE
 class Server():
     def __init__(self, model, users, testset) -> None:
         self.model = model
-        torch.save(self.model().state_dict(), "checkpoints/server.pth")
         self.users = users
         self.testset = testset
         self.log = []
@@ -51,11 +50,6 @@ class Server():
             user.train(kd_epochs, on_device_epochs)
 
     def train(self):
-
-        # Send model
-        for user in self.users:
-            user.model = self.model
-
         # Wait for users to send their model
         self._poll_users(kd_epochs=10, on_device_epochs=10)
 

@@ -3,9 +3,10 @@ from device import Device
 from user import User
 from server import Server
 import os
-from data import load_datasets, load_cifar10
+from data import load_iid_datasets, load_cifar10, load_datasets
 from config import DATASET, train_cifar10
 import nets
+import torch
 
 def main():
     
@@ -22,6 +23,7 @@ def main():
     server_epochs = args.epochs
 
     # Log
+    os.makedirs("checkpoints", exist_ok=True)
     os.makedirs("results", exist_ok=True)
 
     # Load dataset and split it according to the number of devices
@@ -30,10 +32,12 @@ def main():
 
     # Create models and train them all on the public dataset
     server_model = nets.LargeCifar100CNN
+    torch.save(server_model().state_dict(), "checkpoints/server.pth")
+    
     # Generate configs for devices
     devices = [Device(id=i,
                        trainset=trainsets.pop(),
-                       valset=valsets.pop())
+                       valset=testset)
                 for i in range(num_devices)]
 
     # Order devices by resources
@@ -43,25 +47,14 @@ def main():
     # TODO: This should be done at the user level (probably)
     for i, device in enumerate(devices):
         if i < num_devices // 2:
-            device.model = small_model()
+            device.model = small_model
         else:
-            device.model = large_model()
+            device.model = large_model
 
-    # Train all devices on CIFAR10
-
-    # Load public dataset
-    print("Loading CIFAR10")
-    cifar10 = load_cifar10()
-    print("Training on CIFAR10")
-    for device in devices:
-        train_cifar10(device.model, cifar10)
-    train_cifar10(server_model, cifar10)
-    print("Starting FL")
-    
     users = [User(id=i,
                   devices=[devices.pop(0) for _ in range(num_devices // num_users)],
                   testset=testset,
-                  kd_dataset=cifar10) for i in range(num_users)]
+                  model=server_model) for i in range(num_users)]
 
     server = Server(model=server_model, users=users, testset=testset)
 
@@ -75,7 +68,6 @@ def main():
         
         print(f"EPOCH {epoch}")
         # Server aggregates the updates from the users
-        # ShuffleFL step 18, 19
         server.train()
 
         # Server evaluates the model

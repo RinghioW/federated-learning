@@ -1,5 +1,4 @@
 import torch.nn as nn
-import torch
 import torch.nn.functional as F
 import torch.nn.utils.prune as prune
 
@@ -32,14 +31,14 @@ class LargeCifar100CNN(nn.Module):
         self.fc2 = nn.Linear(512, 100)
         
     def forward(self, x):
-        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        x = F.relu(self.bn1(self.conv1(x)))
         x = self.pool(F.relu(self.bn2(self.conv2(x))))
-        x = self.pool(F.relu(self.bn3(self.conv3(x))))
+        x = F.relu(self.bn3(self.conv3(x)))
         x = self.pool(F.relu(self.bn4(self.conv4(x))))
-        x = self.pool(F.relu(self.bn5(self.conv5(x))))
+        x = F.relu(self.bn5(self.conv5(x)))
         x = self.pool(F.relu(self.bn6(self.conv6(x))))
         x = self.global_pool(x)
-        x = torch.flatten(x, 1)
+        x = x.view(-1, 512)
         x = self.dropout(F.relu(self.fc1(x)))
         x = self.fc2(x)
         return x
@@ -62,9 +61,9 @@ class MediumCifar100CNN(nn.Module):
         self.fc2 = nn.Linear(256, 100)
         
     def forward(self, x):
-        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        x = F.relu(self.bn1(self.conv1(x)))
         x = self.pool(F.relu(self.bn2(self.conv2(x))))
-        x = self.pool(F.relu(self.bn3(self.conv3(x))))
+        x = F.relu(self.bn3(self.conv3(x)))
         x = self.pool(F.relu(self.bn4(self.conv4(x))))
         x = self.global_pool(x)
         x = x.view(-1, 256)
@@ -88,7 +87,7 @@ class SmallCifar100CNN(nn.Module):
         self.fc2 = nn.Linear(64, 100)
     
     def forward(self, x):
-        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        x = F.relu(self.bn1(self.conv1(x)))
         x = self.pool(F.relu(self.bn2(self.conv2(x))))
         x = self.global_pool(x)
         x = x.view(-1, 64)

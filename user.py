@@ -1,15 +1,16 @@
 import torch
 import datasets
 from config import DEVICE, LABEL_NAME
+import numpy as np
 
 class User():
-    def __init__(self, id, devices, testset, kd_dataset) -> None:
+    def __init__(self, id, devices, testset, model) -> None:
         self.id = id
         self.devices = devices
-        self.model = None
+        self.model = model
 
         self.testset = testset
-        self.kd_dataset = kd_dataset
+        self.kd_dataset = None
         
         self.log = []
 
@@ -27,7 +28,8 @@ class User():
         # option 2 -> average the teacher logits from all devices (can be done in parallel)
         teachers = [] 
         for device in self.devices:
-            teacher = device.model.to(DEVICE)
+            teacher = device.model().to(DEVICE)
+            teacher.load_state_dict(torch.load(f"checkpoints/device_{device.id}.pth"))
             teacher.eval()
             teachers.append(teacher)
         
@@ -67,7 +69,7 @@ class User():
                 label_loss = ce_loss(student_logits, labels)
 
                 # Weighted sum of the two losses
-                loss = soft_target_loss_weight * soft_targets_loss + ce_loss_weight * label_loss
+                loss = (soft_target_loss_weight * soft_targets_loss) + (ce_loss_weight * label_loss)
 
                 loss.backward()
                 optimizer.step()
@@ -80,16 +82,19 @@ class User():
 
     def create_kd_dataset(self):
         # Sample a dataset from the devices
-        pass
+        # self.kd_dataset = self._sample_devices_uniform()
+        self.kd_dataset = self._sample_devices_uniform()
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
     def train(self, kd_epochs, on_device_epochs):
 
-        # TODO : Adapt model to the devices (KD on the same dataset)
         if self.kd_dataset is not None:
             for device in self.devices:
                 device.update_model(self.model, self.kd_dataset)
+        else:
+            for device in self.devices:
+                torch.save(device.model().state_dict(), f"checkpoints/device_{device.id}.pth")
 
         for device in self.devices:
             device.train(on_device_epochs)
@@ -99,9 +104,9 @@ class User():
 
         self.test()
 
+
     
     def _sample_devices(self, percentages):
-        # Assemble the entire dataset from the devices
         dataset = None
         for device, percentage in zip(self.devices, percentages):
             if dataset is None:
@@ -138,3 +143,55 @@ class User():
         plt.ylabel("Accuracy")
         plt.savefig(f"results/user_{self.id}.svg")
         plt.close()
+    
+    # Functions to determine if there are non-iid data on the devices
+    # Types of non-iid data:
+    # Feature distribution skew: detect by comparing the mean and variance of the features for corresponding classes
+    # Label distribution skew: detect by comparing the number of samples for each class
+    # Quantity skew: detect by comparing the number of samples for each class
+    # Concept drift: detect by comparing the performance of the model on the devices
+
+    def _quantity_skew(self) -> bool:
+        # Check the number of samples the devices
+        quantities = [device.n_samples() for device in self.devices]
+        # Determine if the number of samples is skewed using the coefficient of variation
+        cv = np.std(quantities) / np.mean(quantities)
+        return cv > 0.1
+
+    def _label_distribution_skew(self) -> bool:
+        # Check the number of samples for each class
+        labels = [device.labels() for device in self.devices]
+        # Determine if the number of samples is skewed using the coefficient of variation
+        cv = np.std(labels) / np.mean(labels)
+        return cv > 0.1
+    
+    # Functions to sample the devices
+    def _sample_devices_proportional(self):
+        # Each device contributes a percentage of its dataset
+        p = 0.1
+        percentages = [p for _ in self.devices]
+        return self._sample_devices(percentages)
+    
+    def _sample_devices_fixed(self):
+        # Each device contributes the same number of samples
+        n_samples = 100
+        percentages = [n_samples / device.n_samples() for device in self.devices]
+        return self._sample_devices(percentages)
+    
+    def _sample_devices_imbalance(self):
+        # Take the inverse of the imbalance, normalized by the number of samples
+        total_samples = sum([device.n_samples() for device in self.devices])
+        balances = [(1 / (device.imbalance() + 1e-12)) * (device.n_samples()/total_samples) for device in self.devices]
+        
+        # Sample a higher percentage for the devices with less imbalance
+        percentages = [b / sum(balances) for b in balances]
+        return self._sample_devices(percentages)
+    
+    def  _sample_devices_upload(self):
+        # Take the inverse of the imbalance, normalized by the number of samples
+        total_samples = sum([device.n_samples() for device in self.devices])
+        balances = [device.upload * (device.n_samples()/total_samples) for device in self.devices]
+        
+        # Sample a higher percentage for the devices with less imbalance
+        percentages = [b / sum(balances) for b in balances]
+        return self._sample_devices(percentages)
