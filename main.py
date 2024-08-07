@@ -3,11 +3,11 @@ from device import Device
 from user import User
 from server import Server
 import os
-from data import load_iid_datasets, load_cifar10, load_datasets
-from config import DATASET, train_cifar10
+from data import load_datasets
+from config import DATASET
 import nets
 import torch
-
+import random
 def main():
     
     # Define arguments
@@ -27,7 +27,7 @@ def main():
     os.makedirs("results", exist_ok=True)
 
     # Load dataset and split it according to the number of devices
-    trainsets, valsets, testset = load_datasets(num_devices, DATASET)
+    trainsets, testset = load_datasets(num_devices, DATASET)
 
 
     # Create models and train them all on the public dataset
@@ -35,24 +35,19 @@ def main():
     torch.save(server_model().state_dict(), "checkpoints/server.pth")
     
     # Generate configs for devices
-    devices = [Device(id=i,
-                       trainset=trainsets.pop(),
-                       valset=testset)
-                for i in range(num_devices)]
+    devices = [[] for _ in range(num_users)]
 
-    # Order devices by resources
-    large_model = nets.MediumCifar100CNN
-    small_model = nets.SmallCifar100CNN
-    # The top half of devices are given a large model, and the bottom half are given a small model
-    # TODO: This should be done at the user level (probably)
-    for i, device in enumerate(devices):
-        if i < num_devices // 2:
-            device.model = small_model
-        else:
-            device.model = large_model
+    # Create devices
+    for user in range(num_users):
+        devices[user] = [Device(id=(num_devices//num_users)*user + i,
+                                 trainset=trainsets[user][i], 
+                                 testset=testset, 
+                                 model=(nets.SmallCifar100CNN if random.random() > 0.5 else nets.MediumCifar100CNN)
+                            ) for i in range(num_devices // num_users)]
+
 
     users = [User(id=i,
-                  devices=[devices.pop(0) for _ in range(num_devices // num_users)],
+                  devices=devices[i],
                   testset=testset,
                   model=server_model) for i in range(num_users)]
 

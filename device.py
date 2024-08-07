@@ -6,11 +6,11 @@ import numpy as np
 from scipy.spatial.distance import jensenshannon
 
 class Device():
-    def __init__(self, id, trainset, valset) -> None:
+    def __init__(self, id, trainset, testset, model) -> None:
         self.id = id
         self.dataset = trainset
-        self.valset = valset
-        self.model =None
+        self.testset = testset
+        self.model = model
         self.log = []
 
     def __repr__(self) -> str:
@@ -110,12 +110,12 @@ class Device():
         self.validate()
 
     def validate(self):
-        if self.valset is None:
+        if self.testset is None:
             return 0.
         net = self.model().to(DEVICE)
         net.load_state_dict(torch.load(f"checkpoints/device_{self.id}.pth"))
         net.eval()
-        valloader = torch.utils.data.DataLoader(self.valset, batch_size=32, shuffle=False, num_workers=3)
+        valloader = torch.utils.data.DataLoader(self.testset, batch_size=32, shuffle=False, num_workers=3)
         correct, total = 0, 0
         with torch.no_grad():
             for batch in valloader:
@@ -126,9 +126,9 @@ class Device():
         print(f"DEVICE {self.id} - Validation Accuracy: {correct / total}")
         self.log.append(correct / total)
 
-    def update(self, trainset, valset):
+    def update(self, trainset, testset):
         self.dataset = trainset
-        self.valset = valset
+        self.testset = testset
 
     def flush(self):
         with open(f"results/device_{self.id}.log", "w") as f:
