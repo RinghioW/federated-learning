@@ -4,24 +4,23 @@ import datasets
 from config import DEVICE, LABEL_NAME, NUM_CLASSES
 import numpy as np
 from scipy.spatial.distance import jensenshannon
+import random
 
 class Device():
     def __init__(self, id, trainset, testset, model) -> None:
         self.id = id
         self.dataset = trainset
         self.testset = testset
+        
         self.model = model
+        self.uplink = random.random()
+
         self.log = []
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
     
-    def sample(self, percentage):
-        amount = math.floor(percentage * len(self.dataset))
-        return datasets.Dataset.shuffle(self.dataset).select([i for i in range(amount)])
-    
-    def n_samples(self):
-        return len(self.dataset)
+
     
     def update_model(self, user_model, kd_dataset):
         # Use knowledge distillation to adapt the model to the device
@@ -30,9 +29,6 @@ class Device():
         student.train()
         optimizer = torch.optim.Adam(student.parameters(), lr=0.001)
 
-        # TODO : Test 2 options
-        # option 1 -> each device acts as a teacher separately (takes more time)
-        # option 2 -> average the teacher logits from all devices (can be done in parallel)
         teacher = user_model().to(DEVICE)
         teacher.load_state_dict(torch.load("checkpoints/server.pth"))
         teacher.eval()
@@ -107,9 +103,9 @@ class Device():
                 optimizer.step()
         
         torch.save(net.state_dict(), f"checkpoints/device_{self.id}.pth")
-        self.validate()
+        self.test()
 
-    def validate(self):
+    def test(self):
         if self.testset is None:
             return 0.
         net = self.model().to(DEVICE)
@@ -126,12 +122,29 @@ class Device():
         print(f"DEVICE {self.id} - Validation Accuracy: {correct / total}")
         self.log.append(correct / total)
 
-    def update(self, trainset, testset):
-        self.dataset = trainset
-        self.testset = testset
+    def sample(self, percentage):
+        amount = math.floor(percentage * len(self.dataset))
+        return datasets.Dataset.shuffle(self.dataset).select([i for i in range(amount)])
+    
+    def n_samples(self):
+        return len(self.dataset)
 
-    def flush(self):
-        with open(f"results/device_{self.id}.log", "w") as f:
+    def label_distribution(self):
+        return np.bincount(self.dataset[LABEL_NAME], minlength=NUM_CLASSES)
+
+    def imbalance(self):
+        if len(self.dataset) == 0:
+            return np.float64(0.)
+        distribution = self.label_distribution()
+        n_samples = sum(distribution)
+        n_classes = len(distribution)
+        avg_samples = n_samples / n_classes
+        balanced_distribution = [avg_samples] * n_classes
+        js = jensenshannon(balanced_distribution, distribution)
+        return js
+
+    def flush(self,results_dir):
+        with open(f"{results_dir}/device_{self.id}.log", "w") as f:
             for line in self.log:
                 f.write(f"{line}\n")
     
@@ -140,16 +153,6 @@ class Device():
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy")
         plt.title(f"Device {self.id} Validation Accuracy")
-        plt.savefig(f"results/device_{self.id}.svg")
+        plt.savefig(f"{results_dir}/device_{self.id}.svg")
         plt.close()
     
-    def imbalance(self):
-        if len(self.dataset) == 0:
-            return np.float64(0.)
-        distribution = np.bincount(self.dataset[LABEL_NAME], minlength=NUM_CLASSES)
-        n_samples = sum(distribution)
-        n_classes = len(distribution)
-        avg_samples = n_samples / n_classes
-        balanced_distribution = [avg_samples] * n_classes
-        js = jensenshannon(balanced_distribution, distribution)
-        return js

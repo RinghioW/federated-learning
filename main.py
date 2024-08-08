@@ -14,20 +14,26 @@ def main():
     parser = ArgumentParser(description="Heterogeneous federated learning framework using pytorch")
 
     parser.add_argument("-u", "--users", dest="users", type=int, default=3, help="Total number of users")
-    parser.add_argument("-d", "--devices", dest="devices", type=int, default=9, help="Total number of devices")
+    parser.add_argument("-d", "--devices-per-client", dest="devices", type=int, default=9, help="Total number of devices")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("-s", "--sampling", dest="sampling", type=str, default="iid", help="Sampling method")
+    parser.add_argument("-r", "--results", dest="results", type=str, default="results", help="Results directory")
     # Parse arguments
     args = parser.parse_args()
     num_users = args.users
-    num_devices = args.devices
+    devices_per_client = args.devices
     server_epochs = args.epochs
+    sampling = args.sampling
+    results = args.results
 
     # Log
+    results_dir = f"results/{results}"
     os.makedirs("checkpoints", exist_ok=True)
     os.makedirs("results", exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
 
     # Load dataset and split it according to the number of devices
-    trainsets, testset = load_datasets(num_devices, DATASET)
+    trainsets, testset = load_datasets(num_users, devices_per_client, DATASET)
 
 
     # Create models and train them all on the public dataset
@@ -39,17 +45,17 @@ def main():
 
     # Create devices
     for user in range(num_users):
-        devices[user] = [Device(id=(num_devices//num_users)*user + i,
+        devices[user] = [Device(id=devices_per_client*user + i,
                                  trainset=trainsets[user][i], 
                                  testset=testset, 
                                  model=(nets.SmallCifar100CNN if random.random() > 0.5 else nets.MediumCifar100CNN)
-                            ) for i in range(num_devices // num_users)]
-
+                            ) for i in range(devices_per_client)]
 
     users = [User(id=i,
                   devices=devices[i],
                   testset=testset,
-                  model=server_model) for i in range(num_users)]
+                  model=server_model,
+                  sampling=sampling) for i in range(num_users)]
 
     server = Server(model=server_model, users=users, testset=testset)
 
@@ -69,11 +75,11 @@ def main():
         server.test()
 
     # Save the results
-    server.flush()
+    server.flush(results_dir)
     for user in users:
-        user.flush()
+        user.flush(results_dir)
         for device in user.devices:
-            device.flush()
+            device.flush(results_dir)
     
 
 if __name__ == "__main__":

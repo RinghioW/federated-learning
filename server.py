@@ -56,8 +56,8 @@ class Server():
         # Aggregate the updates from the users
         self._aggregate_updates()
 
-    def flush(self):
-        with open("results/server.log", "w") as f:
+    def flush(self, results_dir):
+        with open(f"{results_dir}/server.log", "w") as f:
             for accuracy in self.log:
                 f.write(f"{accuracy}\n")
         import matplotlib.pyplot as plt
@@ -65,5 +65,5 @@ class Server():
         plt.xlabel("Epoch")
         plt.ylabel("Accuracy")
         plt.title("Server Test Accuracy")
-        plt.savefig("results/server.svg")
+        plt.savefig(f"{results_dir}/server.svg")
         plt.close()
