@@ -17,17 +17,16 @@ def main():
     parser.add_argument("-d", "--devices-per-client", dest="devices", type=int, default=9, help="Total number of devices")
     parser.add_argument("-e", "--epochs", dest="epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("-s", "--sampling", dest="sampling", type=str, default="iid", help="Sampling method")
-    parser.add_argument("-r", "--results", dest="results", type=str, default="results", help="Results directory")
+
     # Parse arguments
     args = parser.parse_args()
     num_users = args.users
     devices_per_client = args.devices
     server_epochs = args.epochs
     sampling = args.sampling
-    results = args.results
 
     # Log
-    results_dir = f"results/{results}"
+    results_dir = f"results/{sampling}"
     os.makedirs("checkpoints", exist_ok=True)
     os.makedirs("results", exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)

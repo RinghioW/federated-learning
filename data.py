@@ -5,7 +5,6 @@ from torchvision.transforms import ToTensor
 # Partition the dataset into num_user parts (IID)
 # Each user then partitions their data in non-IID manner
 def load_datasets(num_users, clients_per_user, name):
-    print(f"No. of users: {num_users}, clients per user: {clients_per_user}")
     to_tensor = ToTensor()
     fds = FederatedDataset(
         dataset=name,
@@ -29,11 +28,12 @@ def load_datasets(num_users, clients_per_user, name):
             partitioner = ExponentialPartitioner(num_partitions=clients_per_user)
         elif partition_id % i == 3:
             partitioner = IidPartitioner(num_partitions=clients_per_user)
+        elif partition_id % i == 4:
+            partitioner = PathologicalPartitioner(num_partitions=clients_per_user, partition_by="coarse_label", num_classes_per_partition=20//clients_per_user)
 
         partitioner.dataset = partition
         for k in range(clients_per_user):
             dataset = partitioner.load_partition(k)
-            print(len(dataset))
             trainsets[partition_id].append(dataset)
         
 

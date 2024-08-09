@@ -15,7 +15,7 @@ class User:
         self.sampling = sampling
 
         self.log = []
-        self.times = []
+        self.latencies = []
 
     def _aggregate_updates(
         self,
@@ -97,20 +97,7 @@ class User:
                 )
         torch.save(student.state_dict(), f"checkpoints/user_{self.id}.pth")
 
-    def create_kd_dataset(self):
-        # Sample a dataset from the devices
-        # Types of sampling:
-        # Full
-        # Size-proportional
-        # Fair
-        # Upload-proportional
-        # Balance-proportional
-        # Balanced
-        # Adaptive
-        # Shuffle-optimized
-        if self.sampling == "full":
-            self.kd_dataset = self._sample_devices_uniform()
-        self.kd_dataset = self._sample_devices_uniform()
+
 
     # Train all the devices belonging to the user
     # Steps 11-15 in the ShuffleFL Algorithm
@@ -131,7 +118,6 @@ class User:
         self._aggregate_updates(epochs=kd_epochs)
 
         self.test()
-
 
     def n_samples(self):
         return len(self.kd_dataset)
@@ -158,6 +144,10 @@ class User:
             for accuracy in self.log:
                 f.write(f"{accuracy}\n")
 
+        with open(f"{results_dir}/user_{self.id}_latencies.log", "w") as f:
+            for latency in self.latencies:
+                f.write(f"{latency}\n")
+
         import matplotlib.pyplot as plt
 
         plt.plot(self.log)
@@ -166,26 +156,52 @@ class User:
         plt.savefig(f"{results_dir}/user_{self.id}.svg")
         plt.close()
 
+        plt.plot(self.latencies)
+        plt.xlabel("Epoch")
+        plt.ylabel("Latency")
+        plt.savefig(f"{results_dir}/user_{self.id}_latencies.svg")
+        plt.close()
+
     # Functions to determine if there are non-iid data on the devices
     # Types of non-iid data:
     # Feature distribution skew: detect by comparing the mean and variance of the features for corresponding classes
     # Label distribution skew: detect by comparing the number of samples for each class
     # Quantity skew: detect by comparing the number of samples for each class
     # Concept drift: detect by comparing the performance of the model on the devices
+    def create_kd_dataset(self):
+        # Sample a dataset from the devices
+        # Types of sampling:
+        # Full
+        # Size-proportional
+        # Fair
+        # Upload-proportional
+        # Balance-proportional
+        # Balanced
+        # Adaptive
+        # Shuffle-optimized
+        if self.sampling == "full":
+            self.kd_dataset = self._sample_full()
+            latency = max([device.uplink * len(device.dataset) for device in self.devices])
+        elif self.sampling == "size-proportional":
+            p = 0.2
+            self.kd_dataset = self._sample_size_proportional(p)
+            latency = max([device.uplink * len(device.dataset) for device in self.devices]) * p
+        elif self.sampling == "fair":
+            k = 50
+            self.kd_dataset = self._sample_fair(k)
+            latency = max([device.uplink for device in self.devices]) * k
+        elif self.sampling == "balance-proportional":
+            self.kd_dataset = self._()
+        elif self.sampling == "upload-proportional":
+            self.kd_dataset = self._sa
+        elif self.sampling == "balanced":
+            self.kd_dataset = self._sample_balanced(100)
+        elif self.sampling == "adaptive":
+            self.kd_dataset = self._sample_adaptive()
+        elif self.sampling == "shuffle-optimized":
+            self.kd_dataset = self._sample_shuffle_optimized()
 
-    def _quantity_skew(self) -> bool:
-        # Check the number of samples the devices
-        quantities = np.array([device.n_samples() for device in self.devices])
-        # Check the Z score
-        z = np.abs((quantities - np.mean(quantities)) / np.std(quantities))
-        return np.any(z > 2)
-
-    def _label_distribution_skew(self) -> bool:
-        # Check the number of samples for each class
-        labels = [device.labels() for device in self.devices]
-        # Determine if the number of samples is skewed using the coefficient of variation
-        cv = np.std(labels) / np.mean(labels)
-        return cv > 0.1
+        self.latencies.append(latency)
 
     # Functions to sample the devices
     def _sample_devices(self, fractions):
@@ -223,21 +239,76 @@ class User:
         # Sample a higher percentage for the devices with less imbalance
         fractions = [b / sum(balances) for b in balances]
         return self._sample_devices(fractions)
+    
+    def _sample_upload_proportional(self):
+        # Sample more from the devices with faster upload speeds
+        upload_speeds = [device.uplink for device in self.devices]
+        fractions = [u / sum(upload_speeds) for u in upload_speeds]
+        return self._sample_devices(fractions)
 
     def _sample_balanced(self, samples_per_class):
         # Sample in a greedy way (starting with the device with faster upload) so that the final dataset's labels are balanced
-        pass
-    
+        devices_by_upload = sorted(self.devices, key=lambda x: x.uplink, reverse=True)
+        n_classes = 100
+        s = [samples_per_class] * n_classes
+        dataset = None
         # Get the label distribution for each device
-        pass
+        for device in devices_by_upload:
+            # Sample as much as possible from the device
+            for class_id in range(n_classes):
+                if s[class_id] <= 0:
+                    break
+                samples = device.sample_amount_class(s[class_id], class_id)
+                if dataset is None:
+                    dataset = samples
+                else:
+                    dataset = datasets.concatenate_datasets([dataset, samples])
+                s[class_id] -= len(samples)
 
     def _sample_adaptive(self):
         # Identify the kind of non-iid data on the devices
-        pass
-
         # Use a sampling technique for the devices based on the identified non-iid data
-        pass
+        if self._label_distribution_skew():
+            return self._()
+        elif self._bottleneck():
+            return self._sample_upload_proportional()
+        elif self._quantity_skew():
+            return self._sample_fair(50)
+        else:
+            return self._sample_size_proportional(0.2)
 
     def _sample_shuffle_optimized(self):
         # Integrate with shuffle optimization
         pass
+
+
+    # Functions to determine if there are non-iid data on the devices
+    def _quantity_skew(self) -> bool:
+        # Check the number of samples the devices
+        quantities = np.array([device.n_samples() for device in self.devices])
+        # Check the Z score
+        z = np.abs((quantities - np.mean(quantities)) / np.std(quantities))
+        return np.any(z > 2)
+
+    def _label_distribution_skew(self) -> bool:
+        # Check the number of samples for each class
+        labels = [device.labels() for device in self.devices]
+        # Determine if the number of samples is skewed using the coefficient of variation
+        cv = np.std(labels) / np.mean(labels)
+        return cv > 0.1
+    
+    def _quality_skew(self) -> bool:
+        # Sample a small amount of data from each device
+        return False
+
+    def _feature_skew(self) -> bool:
+        # Sample a small amount of data from each device
+        return False
+
+    def _bottleneck(self) -> bool:
+        # Check the performance of the model on the devices
+        quantities = np.array([device.uplink for device in self.devices])
+        # Check the Z score
+        z = np.abs((quantities - np.mean(quantities)) / np.std(quantities))
+        return np.any(z > 2)
+        

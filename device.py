@@ -124,7 +124,15 @@ class Device():
 
     def sample(self, percentage):
         amount = math.floor(percentage * len(self.dataset))
-        return datasets.Dataset.shuffle(self.dataset).select([i for i in range(amount)])
+        return datasets.Dataset.shuffle(self.dataset).select(range(amount))
+    
+    def sample_amount(self, amount):
+        return datasets.Dataset.shuffle(self.dataset).select(range(min(amount, len(self.dataset))))
+
+    # Sample a certain amount of samples from a specific class
+    def sample_amount_class(self, amount, class_id):
+        dataset_class = self.dataset.filter(lambda x: x[LABEL_NAME] == class_id)
+        return dataset_class.shuffle().select([range(min(amount, len(dataset_class)))])
     
     def n_samples(self):
         return len(self.dataset)
@@ -147,6 +155,7 @@ class Device():
         with open(f"{results_dir}/device_{self.id}.log", "w") as f:
             for line in self.log:
                 f.write(f"{line}\n")
+        
     
         import matplotlib.pyplot as plt
         plt.plot(self.log)
