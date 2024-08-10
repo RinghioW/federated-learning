@@ -179,6 +179,7 @@ class User:
         # Balanced
         # Adaptive
         # Shuffle-optimized
+        latency = None
         if self.sampling == "full":
             self.kd_dataset = self._sample_full()
             latency = max([device.uplink * len(device.dataset) for device in self.devices])
@@ -191,9 +192,9 @@ class User:
             self.kd_dataset = self._sample_fair(k)
             latency = max([device.uplink for device in self.devices]) * k
         elif self.sampling == "balance-proportional":
-            self.kd_dataset = self._()
+            self.kd_dataset = self._sample_balance_proportional()
         elif self.sampling == "upload-proportional":
-            self.kd_dataset = self._sa
+            self.kd_dataset = self._sample_upload_proportional()
         elif self.sampling == "balanced":
             self.kd_dataset = self._sample_balanced(100)
         elif self.sampling == "adaptive":
@@ -201,6 +202,8 @@ class User:
         elif self.sampling == "shuffle-optimized":
             self.kd_dataset = self._sample_shuffle_optimized()
 
+        if latency is None:
+            latency = 0
         self.latencies.append(latency)
 
     # Functions to sample the devices
@@ -264,12 +267,14 @@ class User:
                 else:
                     dataset = datasets.concatenate_datasets([dataset, samples])
                 s[class_id] -= len(samples)
+        return dataset
 
     def _sample_adaptive(self):
         # Identify the kind of non-iid data on the devices
         # Use a sampling technique for the devices based on the identified non-iid data
         if self._label_distribution_skew():
-            return self._()
+            self.latencies.append(0)
+            return self._sample_balance_proportional()
         elif self._bottleneck():
             return self._sample_upload_proportional()
         elif self._quantity_skew():
@@ -292,10 +297,10 @@ class User:
 
     def _label_distribution_skew(self) -> bool:
         # Check the number of samples for each class
-        labels = [device.labels() for device in self.devices]
+        labels = np.array([device.imbalance() for device in self.devices])
         # Determine if the number of samples is skewed using the coefficient of variation
-        cv = np.std(labels) / np.mean(labels)
-        return cv > 0.1
+        z = np.abs((labels - np.mean(labels)) / np.std(labels))
+        return np.any(z > 2)
     
     def _quality_skew(self) -> bool:
         # Sample a small amount of data from each device

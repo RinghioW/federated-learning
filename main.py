@@ -48,7 +48,7 @@ def main():
                                  trainset=trainsets[user][i], 
                                  testset=testset, 
                                  model=(nets.SmallCifar100CNN if random.random() > 0.5 else nets.MediumCifar100CNN)
-                            ) for i in range(devices_per_client)]
+                                ) for i in range(devices_per_client)]
 
     users = [User(id=i,
                   devices=devices[i],

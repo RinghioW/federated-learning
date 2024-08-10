@@ -4,7 +4,6 @@ import datasets
 from config import DEVICE, LABEL_NAME, NUM_CLASSES
 import numpy as np
 from scipy.spatial.distance import jensenshannon
-import random
 
 class Device():
     def __init__(self, id, trainset, testset, model) -> None:
@@ -13,7 +12,7 @@ class Device():
         self.testset = testset
         
         self.model = model
-        self.uplink = random.random()
+        self.uplink = id
 
         self.log = []
 
