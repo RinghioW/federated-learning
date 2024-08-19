@@ -12,14 +12,14 @@ class Device():
         self.testset = testset
         
         self.model = model
-        self.uplink = id
+        self.compute = (np.exp(id % 5)) * (10**-3)
+        self.uplink = (np.exp(id % 5)) * (10**-3)
 
         self.log = []
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
     
-
     
     def update_model(self, user_model, kd_dataset):
         # Use knowledge distillation to adapt the model to the device
@@ -34,7 +34,7 @@ class Device():
         
         train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
-        
+        kl_loss = torch.nn.KLDivLoss(reduction="batchmean")
         running_loss = 0.0
         running_accuracy = 0.0
         num_samples = 0
@@ -58,7 +58,7 @@ class Device():
                 soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
 
                 # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
-                soft_targets_loss = -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
+                soft_targets_loss = kl_loss(soft_prob, soft_targets) * (T ** 2)
 
                 # Calculate the true label loss
                 label_loss = ce_loss(student_logits, labels)
@@ -127,11 +127,11 @@ class Device():
     
     def sample_amount(self, amount):
         return datasets.Dataset.shuffle(self.dataset).select(range(min(amount, len(self.dataset))))
-
+    
     # Sample a certain amount of samples from a specific class
     def sample_amount_class(self, amount, class_id):
         dataset_class = self.dataset.filter(lambda x: x[LABEL_NAME] == class_id)
-        return dataset_class.shuffle().select([range(min(amount, len(dataset_class)))])
+        return dataset_class.shuffle().select(range(min(amount, len(dataset_class))))
     
     def n_samples(self):
         return len(self.dataset)

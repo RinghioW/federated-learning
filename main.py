@@ -7,7 +7,6 @@ from data import load_datasets
 from config import DATASET
 import nets
 import torch
-import random
 def main():
     
     # Define arguments
@@ -47,7 +46,7 @@ def main():
         devices[user] = [Device(id=devices_per_client*user + i,
                                  trainset=trainsets[user][i], 
                                  testset=testset, 
-                                 model=(nets.SmallCifar100CNN if random.random() > 0.5 else nets.MediumCifar100CNN)
+                                 model=nets.assign_model(i)
                                 ) for i in range(devices_per_client)]
 
     users = [User(id=i,

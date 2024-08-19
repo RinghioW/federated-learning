@@ -45,7 +45,7 @@ class User:
             self.kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=3
         )
         ce_loss = torch.nn.CrossEntropyLoss()
-
+        kl_loss = torch.nn.KLDivLoss(reduction="batchmean")
         running_loss = 0.0
         running_kd_loss = 0.0
         running_ce_loss = 0.0
@@ -59,25 +59,21 @@ class User:
                 # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
                 with torch.no_grad():
                     # Keep the teacher logits for the soft targets
-                    teacher_logits = []
+                    teacher_targets = []
                     for teacher in teachers:
                         logits = teacher(inputs)
-                        teacher_logits.append(logits)
+                        targets = torch.nn.functional.softmax(logits / T, dim=-1)
+                        teacher_targets.append(targets)
+
 
                 # Forward pass with the student model
                 student_logits = student(inputs)
 
-                averaged_teacher_logits = torch.mean(torch.stack(teacher_logits), dim=0)
-                soft_targets = torch.nn.functional.softmax(
-                    averaged_teacher_logits / T, dim=-1
-                )
+                soft_targets = torch.mean(torch.stack(teacher_targets), dim=0)
                 soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
 
                 # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
-                soft_targets_loss = (
-                    -torch.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
-                )
-
+                soft_targets_loss = kl_loss(soft_prob, soft_targets) * (T ** 2)
                 # Calculate the true label loss
                 label_loss = ce_loss(student_logits, labels)
 
@@ -184,19 +180,19 @@ class User:
             self.kd_dataset = self._sample_full()
             latency = max([device.uplink * len(device.dataset) for device in self.devices])
         elif self.sampling == "size-proportional":
-            p = 0.2
+            p = 0.4
             self.kd_dataset = self._sample_size_proportional(p)
             latency = max([device.uplink * len(device.dataset) for device in self.devices]) * p
         elif self.sampling == "fair":
-            k = 50
+            k = 200
             self.kd_dataset = self._sample_fair(k)
             latency = max([device.uplink for device in self.devices]) * k
         elif self.sampling == "balance-proportional":
-            self.kd_dataset = self._sample_balance_proportional()
+            self.kd_dataset = self._sample_balance_proportional(1000)
         elif self.sampling == "upload-proportional":
-            self.kd_dataset = self._sample_upload_proportional()
+            self.kd_dataset = self._sample_upload_proportional(1000)
         elif self.sampling == "balanced":
-            self.kd_dataset = self._sample_balanced(100)
+            self.kd_dataset = self._sample_balanced(10)
         elif self.sampling == "adaptive":
             self.kd_dataset = self._sample_adaptive()
         elif self.sampling == "shuffle-optimized":
@@ -212,42 +208,57 @@ class User:
         for device, f in zip(self.devices, fractions):
             if dataset is None:
                 dataset = device.sample(f)
-            dataset = datasets.concatenate_datasets(
-                [dataset, device.sample(f)]
-            )
+            else:
+                dataset = datasets.concatenate_datasets(
+                    [dataset, device.sample(f)]
+                )
+        return dataset
+    
+    def _sample_devices_amount(self, amounts):
+        dataset = None
+        for device, amount in zip(self.devices, amounts):
+            if dataset is None:
+                dataset = device.sample_amount(amount)
+            else:
+                dataset = datasets.concatenate_datasets(
+                    [dataset, device.sample_amount(amount)]
+                )
         return dataset
     
     def _sample_full(self):
         # Each device contributes all of its dataset
+        self.latencies.append(max([device.uplink * len(device.dataset) for device in self.devices]))
         return self._sample_devices([1 for _ in self.devices])
     
     def _sample_size_proportional(self, p):
         # Each device contributes a percentage of its dataset
         fractions = [p for _ in self.devices]
+        self.latencies.append(max([device.uplink * len(device.dataset) * p for device in self.devices]))
         return self._sample_devices(fractions)
 
     def _sample_fair(self, k):
         # Each device contributes the same number of samples
-        fractions = [k / device.n_samples() for device in self.devices]
-        return self._sample_devices(fractions)
+        amounts = [k for _ in self.devices]
+        self.latencies.append(max([device.uplink for device in self.devices]) * k)
+        return self._sample_devices_amount(amounts)
 
-    def _sample_balance_proportional(self):
-        # Take the inverse of the imbalance, normalized by the number of samples
-        total_samples = sum([device.n_samples() for device in self.devices])
-        balances = [
-            (1 / (device.imbalance() + 1e-12)) * (device.n_samples() / total_samples)
-            for device in self.devices
-        ]
+    def _sample_balance_proportional(self, dataset_length):
+        # Take the inverse of the imbalance
+        balances = [1 / (device.imbalance() + 1e-12) for device in self.devices]
 
         # Sample a higher percentage for the devices with less imbalance
         fractions = [b / sum(balances) for b in balances]
-        return self._sample_devices(fractions)
+        amounts = [f * dataset_length for f in fractions]
+        self.latencies.append(max([device.uplink * amount for device, amount in zip(self.devices, amounts)]))
+        return self._sample_devices_amount(amounts)
     
-    def _sample_upload_proportional(self):
+    def _sample_upload_proportional(self, dataset_length):
         # Sample more from the devices with faster upload speeds
         upload_speeds = [device.uplink for device in self.devices]
         fractions = [u / sum(upload_speeds) for u in upload_speeds]
-        return self._sample_devices(fractions)
+        amounts = [f * dataset_length for f in fractions]
+        self.latencies.append(max([device.uplink * amount for device, amount in zip(self.devices, amounts)]))
+        return self._sample_devices_amount(amounts)
 
     def _sample_balanced(self, samples_per_class):
         # Sample in a greedy way (starting with the device with faster upload) so that the final dataset's labels are balanced
@@ -255,39 +266,44 @@ class User:
         n_classes = 100
         s = [samples_per_class] * n_classes
         dataset = None
+        latencies = []
         # Get the label distribution for each device
         for device in devices_by_upload:
             # Sample as much as possible from the device
+            device_latency = 0
             for class_id in range(n_classes):
                 if s[class_id] <= 0:
-                    break
+                    continue
                 samples = device.sample_amount_class(s[class_id], class_id)
                 if dataset is None:
                     dataset = samples
                 else:
                     dataset = datasets.concatenate_datasets([dataset, samples])
                 s[class_id] -= len(samples)
+                device_latency += device.uplink * len(samples)
+            latencies.append(device_latency)
+        self.latencies.append(max(latencies))
         return dataset
 
     def _sample_adaptive(self):
         # Identify the kind of non-iid data on the devices
         # Use a sampling technique for the devices based on the identified non-iid data
         if self._label_distribution_skew():
-            self.latencies.append(0)
-            return self._sample_balance_proportional()
+            return self._sample_balance_proportional(1000)
         elif self._bottleneck():
-            return self._sample_upload_proportional()
+            return self._sample_upload_proportional(1000)
         elif self._quantity_skew():
-            return self._sample_fair(50)
+            return self._sample_size_proportional(0.3)
         else:
-            return self._sample_size_proportional(0.2)
+            return self._sample_fair(200)
 
     def _sample_shuffle_optimized(self):
-        # Integrate with shuffle optimization
-        pass
+        # User shuffles according to the ShuffleFL algorithm
+        # Cluster distributions 
+        self.cluster_distributions = [device.label_distribution() for device in self.devices]
 
 
-    # Functions to determine if there are non-iid data on the devices
+    # Functions to determine data heterogeneity on the devices
     def _quantity_skew(self) -> bool:
         # Check the number of samples the devices
         quantities = np.array([device.n_samples() for device in self.devices])
@@ -301,6 +317,13 @@ class User:
         # Determine if the number of samples is skewed using the coefficient of variation
         z = np.abs((labels - np.mean(labels)) / np.std(labels))
         return np.any(z > 2)
+
+    def _bottleneck(self) -> bool:
+        # Check the performance of the model on the devices
+        latencies = np.array([device.uplink for device in self.devices])
+        # Check the Z score
+        z = np.abs((latencies - np.mean(latencies)) / np.std(latencies))
+        return np.any(z > 2)
     
     def _quality_skew(self) -> bool:
         # Sample a small amount of data from each device
@@ -309,11 +332,4 @@ class User:
     def _feature_skew(self) -> bool:
         # Sample a small amount of data from each device
         return False
-
-    def _bottleneck(self) -> bool:
-        # Check the performance of the model on the devices
-        quantities = np.array([device.uplink for device in self.devices])
-        # Check the Z score
-        z = np.abs((quantities - np.mean(quantities)) / np.std(quantities))
-        return np.any(z > 2)
         
