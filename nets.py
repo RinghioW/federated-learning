@@ -90,8 +90,8 @@ class SmallCifar100CNN(nn.Module):
 
 def assign_model(i):
     if i % 3 == 0:
-        return LargeCifar100CNN
+        return SmallCifar100CNN
     elif i % 3 == 1:
         return MediumCifar100CNN
     elif i % 3 == 2:
-        return SmallCifar100CNN
+        return LargeCifar100CNN

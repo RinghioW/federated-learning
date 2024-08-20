@@ -4,7 +4,8 @@ import datasets
 from config import DEVICE, LABEL_NAME, NUM_CLASSES
 import numpy as np
 from scipy.spatial.distance import jensenshannon
-
+import torchvision
+from copy import deepcopy
 class Device():
     def __init__(self, id, trainset, testset, model) -> None:
         self.id = id
@@ -12,10 +13,11 @@ class Device():
         self.testset = testset
         
         self.model = model
-        self.compute = (np.exp(id % 5)) * (10**-3)
+        self.compute = 3*(np.exp(id % 5)) * (10**-3)
         self.uplink = (np.exp(id % 5)) * (10**-3)
 
         self.log = []
+        self.clusters = []
 
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
@@ -31,8 +33,7 @@ class Device():
         teacher = user_model().to(DEVICE)
         teacher.load_state_dict(torch.load("checkpoints/server.pth"))
         teacher.eval()
-        
-        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=3)
+        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=0)
         ce_loss = torch.nn.CrossEntropyLoss()
         kl_loss = torch.nn.KLDivLoss(reduction="batchmean")
         running_loss = 0.0
@@ -42,7 +43,9 @@ class Device():
         for _ in range(epochs):
 
             for batch in train_loader:
-                inputs, labels = batch["img"].to(DEVICE), batch[LABEL_NAME].to(DEVICE)
+                inputs_list = [torch.tensor(img, dtype=torch.float32) for img in batch["img"]]
+                inputs = torch.stack(inputs_list).to(DEVICE)
+                labels = torch.tensor(batch["fine_label"], dtype=torch.long).to(DEVICE)
 
                 optimizer.zero_grad()
 
@@ -126,10 +129,12 @@ class Device():
         return datasets.Dataset.shuffle(self.dataset).select(range(amount))
     
     def sample_amount(self, amount):
+        amount = math.floor(amount)
         return datasets.Dataset.shuffle(self.dataset).select(range(min(amount, len(self.dataset))))
     
     # Sample a certain amount of samples from a specific class
     def sample_amount_class(self, amount, class_id):
+        amount = math.floor(amount)
         dataset_class = self.dataset.filter(lambda x: x[LABEL_NAME] == class_id)
         return dataset_class.shuffle().select(range(min(amount, len(dataset_class))))
     
@@ -150,17 +155,15 @@ class Device():
         js = jensenshannon(balanced_distribution, distribution)
         return js
 
-    def flush(self,results_dir):
-        with open(f"{results_dir}/device_{self.id}.log", "w") as f:
-            for line in self.log:
-                f.write(f"{line}\n")
-        
+    def cluster(self, lda_estimator, kmeans_estimator):
+        if len(self.dataset) == 0:
+            self.clusters = []
+            return
+        dataset = self.dataset.shuffle()
+        dataset = np.array(deepcopy(dataset["img"])).reshape(len(self.dataset), -1)
+        feature_space = lda_estimator.transform(dataset)
+        self.clusters = kmeans_estimator.predict(feature_space).tolist()
     
-        import matplotlib.pyplot as plt
-        plt.plot(self.log)
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.title(f"Device {self.id} Validation Accuracy")
-        plt.savefig(f"{results_dir}/device_{self.id}.svg")
-        plt.close()
+    def cluster_distribution(self):
+        return np.bincount(self.clusters, minlength=5)
     

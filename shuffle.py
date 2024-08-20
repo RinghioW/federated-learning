@@ -1,9 +1,6 @@
 import datasets
 import math
-from config import LABEL_NAME
-# Returns device datasets and cluster labels after shuffling the data
-# Assume that datasets is a list of numpy arrays
-# Implements the transformation described by Equation 1 from ShuffleFL
+
 def shuffle_data(datasets, clusters, distributions, transition_matrices):
     n_devices = len(distributions)
     n_clusters = len(distributions[0])
@@ -16,27 +13,40 @@ def shuffle_data(datasets, clusters, distributions, transition_matrices):
                 if d != j:
                     # Sample class i and send to device j
                     n_samples = math.floor(transition_matrix[i][j] * distribution[i])
-                    datasets[d], samples = _extract(datasets[d], clusters[d], n_samples)
+                    datasets[d], clusters[d], samples = _extract(datasets[d], clusters[d], i, n_samples)
 
                     # Add the samples to the dataset of device j
-                    datasets[j] = _insert(datasets[j], samples)
+                    if samples is not None and len(samples) > 0:
+                        datasets[j], clusters[j] = _insert(datasets[j], clusters[j], samples, i)
 
                     n_transferred_samples += n_samples
     
     return datasets, n_transferred_samples
 
-# Extract an amount of samples of the target cluster from the dataset
-def _extract(dataset, target_cluster, n_samples):
-    dataset_cluster = dataset.filter(lambda x: cluster(x) == target_cluster)
+def _extract(dataset, cluster_labels, target_cluster, n_samples):
+    if n_samples == 0:
+        return dataset, cluster_labels, None
+    idx_matches = []
+    matches = []
+
+    for idx, cluster in enumerate(cluster_labels):
+        if cluster == target_cluster:
+            idx_matches.append(idx)
+
+    # Dataset filter the rows on idx_matches
+    idx_matches = idx_matches[:n_samples]
+    matches = dataset.select(idx_matches)
     # Remove the samples from the dataset
-    samples = dataset_cluster.shuffle().select(range(min(n_samples, len(dataset_cluster))))
-    dataset = dataset.filter(lambda x: x not in samples)
-    return dataset, samples
+    dataset = dataset.select([idx for idx in range(len(dataset)) if idx not in idx_matches])
+    
+    cluster_labels = [cluster for idx, cluster in enumerate(cluster_labels) if idx not in idx_matches]
+    assert len(dataset) == len(cluster_labels)
+    return dataset, cluster_labels, matches
 
-# Insert samples into the dataset
-def _insert(dataset, samples):
-    return datasets.concatenate_datasets([dataset, samples])
-
-# TODO: Implement cluster function
-def cluster(x):
-    return x[LABEL_NAME]
+def _insert(dataset, cluster_labels, samples, target_label):
+    if samples is None or len(samples) == 0:
+        return dataset, cluster_labels
+    cluster_labels = cluster_labels + [target_label] * len(samples)
+    dataset = datasets.concatenate_datasets([dataset, samples])
+    assert len(dataset) == len(cluster_labels)
+    return dataset, cluster_labels

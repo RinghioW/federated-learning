@@ -34,7 +34,7 @@ def load_datasets(num_users, clients_per_user, name):
         partitioner.dataset = partition
         for k in range(clients_per_user):
             dataset = partitioner.load_partition(k)
+            print(f"User {partition_id} - Client {k} - {len(dataset)} samples")
             trainsets[partition_id].append(dataset)
-        
 
     return trainsets, fds.load_split("test")

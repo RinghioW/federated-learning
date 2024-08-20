@@ -53,17 +53,5 @@ class Server():
         # Wait for users to send their model
         self._poll_users(kd_epochs=10, on_device_epochs=10)
 
-        # Aggregate the updates from the users
+        # # Aggregate the updates from the users
         self._aggregate_updates()
-
-    def flush(self, results_dir):
-        with open(f"{results_dir}/server.log", "w") as f:
-            for accuracy in self.log:
-                f.write(f"{accuracy}\n")
-        import matplotlib.pyplot as plt
-        plt.plot(self.log)
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy")
-        plt.title("Server Test Accuracy")
-        plt.savefig(f"{results_dir}/server.svg")
-        plt.close()

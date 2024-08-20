@@ -57,8 +57,6 @@ def main():
 
     server = Server(model=server_model, users=users, testset=testset)
 
-    # Evaluate the server model before training
-    server.test()
 
     # Perform federated learning for the server model
     # Algorithm 1 in ShuffleFL
@@ -73,11 +71,18 @@ def main():
         server.test()
 
     # Save the results
-    server.flush(results_dir)
-    for user in users:
-        user.flush(results_dir)
-        for device in user.devices:
-            device.flush(results_dir)
+    with open(f"{results_dir}/server-accuracies.txt", "w") as f:
+        f.write(f"{server.log}\n")
+    with open(f"{results_dir}/latencies.txt", "w") as f:
+        for user in users:
+            f.write(f"{user.latency}\n")
+    with open(f"{results_dir}/user-accuracies.txt", "w") as f:
+        for user in users:
+            f.write(f"{user.log}\n")
+    with open(f"{results_dir}/device-accuracies.txt", "w") as f:
+        for user in users:
+            for device in user.devices:
+                f.write(f"{device.log}\n")
     
 
 if __name__ == "__main__":

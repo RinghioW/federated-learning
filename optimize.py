@@ -13,6 +13,7 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
 
     n_devices = len(cluster_distributions)
     n_clusters = len(cluster_distributions[0])
+    print("N_clusters", n_clusters)
 
     def objective(x: np.ndarray) -> float:
         transition_matrices = _tms_from_flat_unnormalized(x, n_devices, n_clusters)
@@ -35,6 +36,7 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
                         x0=np.random.rand(n_devices, n_clusters, n_devices).flatten(),
                         method='SLSQP',
                         bounds=[(0.,1.)] * (n_devices * n_clusters * n_devices),
+                        options={'maxiter': 50}
                         )
     if not result.success:
         print(f"WARNING: Optimization did not converge: {result.message} with status {result.status}")
