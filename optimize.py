@@ -10,7 +10,7 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
                                    downlinks: List[float],
                                    computes: List[float],
                                    ) -> np.ndarray:
-
+ 
     n_devices = len(cluster_distributions)
     n_clusters = len(cluster_distributions[0])
     print("N_clusters", n_clusters)
@@ -25,9 +25,15 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
         latencies = np.array(_latencies(uplinks, downlinks, computes, transition_matrices, cluster_distributions, cluster_distributions_post_shuffle))
 
 
-        data_imbalance = np.mean(data_imbalances) * adaptive_scaling_factor
+        # Put it in range [0,2000]
+        data_imbalance = np.mean(data_imbalances) 
         system_latency = np.amax(latencies)
-        obj_func = system_latency * data_imbalance
+        kd_data = kd_data_len(transition_matrices, cluster_distributions)
+        print("Kd data ",kd_data)
+        print("System latency ", system_latency)
+        print("Data imbalance ", data_imbalance)
+        obj_func = system_latency + 10000*data_imbalance + kd_data*100
+
 
         return obj_func
 
@@ -36,7 +42,6 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
                         x0=np.random.rand(n_devices, n_clusters, n_devices).flatten(),
                         method='SLSQP',
                         bounds=[(0.,1.)] * (n_devices * n_clusters * n_devices),
-                        options={'maxiter': 50}
                         )
     if not result.success:
         print(f"WARNING: Optimization did not converge: {result.message} with status {result.status}")
@@ -46,6 +51,21 @@ def optimize_transmission_matrices(adaptive_scaling_factor: float,
         
     return transition_matrices
 
+def kd_data_len(transition_matrices, cluster_distributions):
+    n_devices = len(transition_matrices)
+    n_clusters = len(transition_matrices[0])
+    kd_len = 0
+    for d in range(n_devices):
+        transition_matrix = transition_matrices[d]
+        cluster_distribution = cluster_distributions[d]
+
+        for i in range(n_clusters):
+            num_samples = cluster_distribution[i]
+            for j in range(n_devices):
+                if d == j:
+                    kd_len += transition_matrix[i][j] * num_samples
+    
+    return 4000 - min(kd_len, 4000)
 
 def _tms_from_flat_unnormalized(x, n_devices, n_clusters):
     transition_matrices = x.reshape((n_devices, n_clusters, n_devices))

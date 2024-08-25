@@ -39,6 +39,12 @@ class LargeCifar100CNN(nn.Module):
         x = self.fc2(x)
         return x
 
+    def to_cifar10(self):
+        self.fc2 = nn.Linear(512, 10)
+
+    def to_cifar100(self):
+        self.fc2 = nn.Linear(512, 100)
+
 class MediumCifar100CNN(nn.Module):
     def __init__(self):
         super(MediumCifar100CNN, self).__init__()
@@ -66,6 +72,11 @@ class MediumCifar100CNN(nn.Module):
         x = self.fc2(x)
         return x
 
+    def to_cifar10(self):
+        self.fc2 = nn.Linear(256, 10)
+
+    def to_cifar100(self):
+        self.fc2 = nn.Linear(256, 100)
         
 class SmallCifar100CNN(nn.Module):
     def __init__(self):
@@ -87,6 +98,12 @@ class SmallCifar100CNN(nn.Module):
         x = self.dropout(x)
         x = self.fc2(x)
         return x
+    
+    def to_cifar10(self):
+        self.fc2 = nn.Linear(256, 10)
+
+    def to_cifar100(self):
+        self.fc2 = nn.Linear(256, 100)
 
 def assign_model(i):
     if i % 3 == 0:

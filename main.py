@@ -4,10 +4,8 @@ from user import User
 from server import Server
 import os
 from data import load_datasets
-from config import DATASET
 import nets
 import torch
-from data import load_datasets
 def main():
     
     # Define arguments
@@ -32,7 +30,7 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     # Load dataset and split it according to the number of devices
-    trainsets, testset = load_datasets(num_users, devices_per_client, DATASET)
+    trainsets, testset = load_datasets(num_users, devices_per_client, "cifar100")
 
 
     # Create models and train them all on the public dataset

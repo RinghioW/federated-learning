@@ -1,6 +1,5 @@
 import torch
 from config import DEVICE
-
 class Server():
     def __init__(self, model, users, testset) -> None:
         self.model = model

@@ -4,8 +4,6 @@ import datasets
 from config import DEVICE, LABEL_NAME, NUM_CLASSES
 import numpy as np
 from scipy.spatial.distance import jensenshannon
-import torchvision
-from copy import deepcopy
 class Device():
     def __init__(self, id, trainset, testset, model) -> None:
         self.id = id
@@ -19,11 +17,13 @@ class Device():
         self.log = []
         self.clusters = []
 
+
     def __repr__(self) -> str:
         return f"Device({self.config}, 'samples': {len(self.dataset)})"
     
     
     def update_model(self, user_model, kd_dataset):
+
         # Use knowledge distillation to adapt the model to the device
         # Train server model on the dataset using kd
         student = self.model().to(DEVICE)
@@ -33,7 +33,7 @@ class Device():
         teacher = user_model().to(DEVICE)
         teacher.load_state_dict(torch.load("checkpoints/server.pth"))
         teacher.eval()
-        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=0)
+        train_loader = torch.utils.data.DataLoader(kd_dataset, shuffle=True, drop_last=True, batch_size=32, num_workers=3)
         ce_loss = torch.nn.CrossEntropyLoss()
         kl_loss = torch.nn.KLDivLoss(reduction="batchmean")
         running_loss = 0.0
@@ -43,10 +43,7 @@ class Device():
         for _ in range(epochs):
 
             for batch in train_loader:
-                inputs_list = [torch.tensor(img, dtype=torch.float32) for img in batch["img"]]
-                inputs = torch.stack(inputs_list).to(DEVICE)
-                labels = torch.tensor(batch["fine_label"], dtype=torch.long).to(DEVICE)
-
+                inputs, labels = batch["img"].to(DEVICE), batch[LABEL_NAME].to(DEVICE)
                 optimizer.zero_grad()
 
                 # Forward pass with the teacher model - do not save gradients here as we do not change the teacher's weights
@@ -56,7 +53,7 @@ class Device():
 
                 # Forward pass with the student model
                 student_logits = student(inputs)
-                T = 2
+                T = 3.0
                 soft_targets = torch.nn.functional.softmax(teacher_logits / T, dim=-1)
                 soft_prob = torch.nn.functional.log_softmax(student_logits / T, dim=-1)
 
@@ -67,8 +64,8 @@ class Device():
                 label_loss = ce_loss(student_logits, labels)
 
                 # Weighted sum of the two losses
-                soft_target_loss_weight = 0.75
-                ce_loss_weight = 0.25
+                soft_target_loss_weight = 0.4
+                ce_loss_weight = 0.6
                 loss = (soft_target_loss_weight * soft_targets_loss) + (ce_loss_weight * label_loss)
 
                 loss.backward()
@@ -92,7 +89,7 @@ class Device():
 
         optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
 
-        trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=32, shuffle=True, drop_last=True, num_workers=3)
+        trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=32, shuffle=True, drop_last=True, num_workers=4)
         criterion = torch.nn.CrossEntropyLoss()
 
         for _ in range(epochs):
@@ -105,7 +102,7 @@ class Device():
                 optimizer.step()
         
         torch.save(net.state_dict(), f"checkpoints/device_{self.id}.pth")
-        self.test()
+        # self.test()
 
     def test(self):
         if self.testset is None:
@@ -113,7 +110,7 @@ class Device():
         net = self.model().to(DEVICE)
         net.load_state_dict(torch.load(f"checkpoints/device_{self.id}.pth"))
         net.eval()
-        valloader = torch.utils.data.DataLoader(self.testset, batch_size=32, shuffle=False, num_workers=3)
+        valloader = torch.utils.data.DataLoader(self.testset, batch_size=32, shuffle=False, num_workers=4)
         correct, total = 0, 0
         with torch.no_grad():
             for batch in valloader:
@@ -126,17 +123,17 @@ class Device():
 
     def sample(self, percentage):
         amount = math.floor(percentage * len(self.dataset))
-        return datasets.Dataset.shuffle(self.dataset).select(range(amount))
+        return datasets.Dataset.shuffle(self.dataset).select([i for i in range(amount)])
     
     def sample_amount(self, amount):
         amount = math.floor(amount)
-        return datasets.Dataset.shuffle(self.dataset).select(range(min(amount, len(self.dataset))))
+        return datasets.Dataset.shuffle(self.dataset).select([i for i in range(min(amount, len(self.dataset)))])
     
     # Sample a certain amount of samples from a specific class
     def sample_amount_class(self, amount, class_id):
         amount = math.floor(amount)
         dataset_class = self.dataset.filter(lambda x: x[LABEL_NAME] == class_id)
-        return dataset_class.shuffle().select(range(min(amount, len(dataset_class))))
+        return dataset_class.select([i for i in range(min(amount, len(dataset_class)))])
     
     def n_samples(self):
         return len(self.dataset)
@@ -155,15 +152,13 @@ class Device():
         js = jensenshannon(balanced_distribution, distribution)
         return js
 
-    def cluster(self, lda_estimator, kmeans_estimator):
+    def cluster(self, kmeans_estimator):
         if len(self.dataset) == 0:
             self.clusters = []
             return
-        dataset = self.dataset.shuffle()
-        dataset = np.array(deepcopy(dataset["img"])).reshape(len(self.dataset), -1)
-        feature_space = lda_estimator.transform(dataset)
-        self.clusters = kmeans_estimator.predict(feature_space).tolist()
+        self.clusters = kmeans_estimator.predict(np.array(self.dataset["img"]).reshape(len(self.dataset), -1)).tolist()
     
     def cluster_distribution(self):
         return np.bincount(self.clusters, minlength=5)
     
+
